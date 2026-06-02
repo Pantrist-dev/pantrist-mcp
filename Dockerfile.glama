@@ -1,0 +1,38 @@
+# Glama-only image. The Glama directory spins this up, sends MCP
+# introspection over stdio (initialize, tools/list, …) and checks the
+# responses — no real Pantrist token required, because introspection
+# never invokes a tool handler.
+#
+# The production image is `./Dockerfile` (HTTP transport at port 8787,
+# OAuth-required). Glama can't test that one because it can't complete
+# the OAuth flow on the user's behalf.
+#
+# Build:   docker build -f Dockerfile.glama -t pantrist-mcp:stdio .
+# Run:     docker run -i pantrist-mcp:stdio
+
+FROM node:22-slim AS builder
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci --include=dev
+
+COPY tsconfig.json ./
+COPY src ./src
+RUN npm run build && npm prune --omit=dev
+
+FROM node:22-slim
+
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY package.json ./
+
+USER node
+
+# stdio transport — reads JSON-RPC from stdin, writes to stdout. The
+# `initialize` and `tools/list` methods return cleanly without
+# PANTRIST_TOKEN; only tool *invocations* would need a real token.
+CMD ["node", "dist/stdio.js"]
