@@ -1,0 +1,81 @@
+name: Deploy Pantrist MCP
+
+# Push to main builds + pushes; PRs just verify the build still works.
+# Mirrors the pattern in pantrist-api's deploy-*.yml workflows.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "openapi/**"
+      - ".github/workflows/deploy.yml"
+
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "openapi/**"
+      - ".github/workflows/deploy.yml"
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        if: ${{ github.event_name != 'pull_request' }}
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.PRIVATE_PACKAGE_TOKEN }}
+
+      - name: Generate version string
+        id: version
+        run: |
+          # Same scheme as pantrist-api's deploy workflows: ISO date + run
+          # index, monotonically increasing per build so the chart can pin
+          # an exact tag without ever colliding.
+          DATE=$(date +'%Y-%m-%d')
+          RUN_INDEX=$((GITHUB_RUN_NUMBER - 1))
+          VERSION="$DATE-$RUN_INDEX"
+          echo "Generated version is $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          docker build . \
+            --file Dockerfile \
+            --tag ghcr.io/pantrist-dev/pantrist-mcp:${{ steps.version.outputs.version }}
+          docker push ghcr.io/pantrist-dev/pantrist-mcp:${{ steps.version.outputs.version }}
