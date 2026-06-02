@@ -1,0 +1,33 @@
+{
+  "name": "pantrist-mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Model Context Protocol server wrapping the Pantrist REST API.",
+  "bin": {
+    "pantrist-mcp": "dist/stdio.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/server.test.ts",
+    "generate:client": "openapi-typescript openapi/pantrist-openapi.json -o src/generated/pantrist-api.ts",
+    "dev:stdio": "tsx src/stdio.ts",
+    "dev:http": "tsx src/http.ts",
+    "start:stdio": "node dist/stdio.js",
+    "start:http": "node dist/http.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "express": "^4.21.2",
+    "openapi-fetch": "^0.13.8",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.0",
+    "openapi-typescript": "^7.13.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
