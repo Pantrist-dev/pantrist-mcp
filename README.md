@@ -26,6 +26,70 @@ layer (`src/tools.ts`) is hand-written.
 | **stdio** (`src/stdio.ts`) | Local PoC, single user, Claude Desktop | Bearer from `PANTRIST_TOKEN` env |
 | **Streamable HTTP** (`src/http.ts`) | Remote, multi-user, the Claude connector | Per-request Bearer, obtained by the client via OAuth |
 
+## Connecting Claude to the hosted server
+
+If you just want to **use** Pantrist with Claude (not self-host), the public
+endpoint is **`https://mcp.pantrist.app/mcp`**. Pick whichever Claude surface
+you're on; in every case the first tool call walks you through an OAuth login
+to your Pantrist account, no token to copy by hand.
+
+### Claude.ai (web or desktop app)
+
+1. **claude.ai** → profile menu → **Settings → Connectors**
+2. Click **Add custom connector**
+3. Fill in:
+   - **Name**: `Pantrist`
+   - **URL**: `https://mcp.pantrist.app/mcp`
+4. Save → click **Connect**. A popup opens the Pantrist consent page.
+5. Sign in → authorize → the popup closes.
+6. Start a new chat — the Pantrist tools (shopping list, pantry, week plan,
+   recipes) show up in the tool selector. Try *"What's on my shopping list?"*
+
+### Claude Code (CLI)
+
+```bash
+claude mcp add pantrist --transport http https://mcp.pantrist.app/mcp
+```
+
+In the session, run `/mcp` to confirm it's listed. The first tool call triggers
+the OAuth flow in your browser.
+
+### Claude Desktop (manual config)
+
+For Claude Desktop versions that support remote MCP, in
+`~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or
+the equivalent on Windows/Linux:
+
+```json
+{
+  "mcpServers": {
+    "pantrist": {
+      "type": "url",
+      "url": "https://mcp.pantrist.app/mcp"
+    }
+  }
+}
+```
+
+Restart Claude Desktop. First tool use kicks off OAuth.
+
+### Sanity-checks if it doesn't work
+
+```bash
+# 200 OK + {"status":"ok"}
+curl -fsS https://mcp.pantrist.app/healthz
+
+# 401 + a WWW-Authenticate header pointing at /.well-known/oauth-protected-resource
+curl -i -X POST https://mcp.pantrist.app/mcp -H 'Content-Type: application/json' -d '{}'
+
+# JSON listing api.pantrist.app as the authorization server
+curl -fsS https://mcp.pantrist.app/.well-known/oauth-protected-resource
+```
+
+If all three succeed but the connector flow still fails, the API's
+`OAUTH_AUTHORIZE_URL` probably isn't set to a browser-facing consent page —
+see the warning in [the OAuth dependency note](#how-the-oauth-handshake-flows).
+
 ## Quick start (stdio — fastest path)
 
 You can validate the whole tool set in a couple of minutes without touching
