@@ -15,9 +15,9 @@ call `list_lists` to discover ids). All map to public REST endpoints.
 | `add_pantry_item` | `name`, `amount?`, `unitId?`, `listId?` | `POST …/pantryList/add-by-name` | `amount`/`unitId` omitted ⇒ API defaults (1 / `pieces`). |
 | `reduce_pantry_amount` | `itemId`, `amountChange`, `autoRestock?`, `listId?` | `PUT …/pantryList/{itemId}/change-amount` | `amountChange` is a **delta** (negative consumes). `autoRestock` defaults to false. |
 | `update_pantry_item` | `itemId`, `name?`, `brand?`, `categoryUuid?`, `unitId?`, `notes?`, `listId?` | `GET` then `PUT …/pantryList/{itemId}` | Metadata only — use `reduce_pantry_amount` for stock. Fetches the current item first so omitted fields round-trip unchanged. Pass `null` to `brand`/`notes` to clear. |
-| `search_recipes` | `searchString?`, `categories?`, `currentPage?` | `POST /recipe/filter` | ⚠️ Requires a Firebase/OAuth token — **not** an API key (see AUTHENTICATION.md). |
-| `get_recipe` | `recipeId` | `GET /recipe/{recipeId}` | ⚠️ Same token caveat as above. |
-| `delete_recipe` | `recipeId` | `DELETE /recipe/{recipeId}` | ⚠️ Same token caveat. API rejects deletes of recipes you don't own — that error is surfaced verbatim. |
+| `search_recipes` | `searchString?`, `categories?`, `currentPage?` | `POST /recipe/filter` | Paginated; returns `{ results, totalCount, totalPages, currentPage }`. |
+| `get_recipe` | `recipeId` | `GET /recipe/{recipeId}` | Returns the full `RecipeDto`. |
+| `delete_recipe` | `recipeId` | `DELETE /recipe/{recipeId}` | API rejects deletes of recipes you don't own — that error is surfaced verbatim. |
 | `get_week_plan` | `from`, `to`, `listId?` | `GET /list/{listId}/weekPlan?from=&to=` | Dates `YYYY-MM-DD`. |
 | `update_week_plan_day` | `date`, `list[]`, `listId?` | `PUT …/weekPlan/{date}` | `list` entries: `{ uuid?, name?, type?: recipe\|manual }`. Empty array clears the day. |
 

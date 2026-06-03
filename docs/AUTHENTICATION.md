@@ -15,28 +15,19 @@ via OAuth (HTTP).
 Because the AS and the data API are the same service, the access token the
 client receives **is** the API Bearer — so this server just passes it through.
 
-## Token types and tool compatibility ⚠️
+## Token types
 
-This is the most important and least obvious part. The backend protects
-different endpoints with different guards, so **not every token type works with
-every tool**:
+All three token types work with every tool — the previous recipe-controller
+carve-out has been removed (the recipe controller now uses `AnyAuthGuard`
+alongside the list / shopping / pantry / week-plan controllers).
 
-| Token type | List / Shopping / Pantry / Week-plan tools | Recipe tools (`search_recipes`, `get_recipe`) |
-|---|---|---|
-| **OAuth access token** (from `/access-token/token`) | ✅ | ✅ |
-| **Firebase ID token** (e.g. copied from the app) | ✅ | ✅ |
-| **Pantrist API key** (`<uuid>_<secret>`) | ✅ | ❌ **401** |
+| Token type | All tools |
+|---|---|
+| **OAuth access token** (from `/access-token/token`) | ✅ |
+| **Firebase ID token** (e.g. copied from the app) | ✅ |
+| **Pantrist API key** (`<uuid>_<secret>`) | ✅ |
 
-Why: the list/shopping/pantry/week-plan controllers use `AnyAuthGuard` (Firebase
-token **or** API key), but the **recipe controller uses `FirebaseAuthGuard`**,
-which does not accept the `<uuid>_<secret>` API key. So if you run the stdio
-server with an **API key** as `PANTRIST_TOKEN`, the recipe tools will fail with
-401 while everything else works.
-
-> **Recommendation:** for full tool coverage use an **OAuth access token** or a
-> **Firebase ID token**, not an API key.
-
-Note also: the OAuth access token the API issues is a Firebase **custom token**
+Note: the OAuth access token the API issues is a Firebase **custom token**
 (1-hour lifetime). The backend's auth guard verifies it directly; you do not
 need to exchange it for an ID token.
 

@@ -40,7 +40,9 @@ const listIdArg = {
   listId: z
     .string()
     .optional()
-    .describe('List UUID. Defaults to PANTRIST_LIST_ID if omitted.'),
+    .describe(
+      'List UUID — call `list_lists` to discover one. Optional only in stdio mode (falls back to the PANTRIST_LIST_ID env var); required explicitly in HTTP mode.',
+    ),
 };
 
 /**
@@ -52,7 +54,7 @@ export function registerTools(server: McpServer): void {
   // --- discovery -----------------------------------------------------------
   server.tool(
     'list_lists',
-    'List the shopping lists / pantries the authenticated user can access. Use a returned id as `listId` for the other tools.',
+    'List the shopping lists / pantries the authenticated user can access. Read-only. Returns an array of list objects each with `uuid`, `name`, and the user\'s role on that list — use a returned `uuid` as the `listId` argument for every other tool here.',
     {},
     async () => text(unwrap(await client().GET('/list'))),
   );
@@ -60,7 +62,7 @@ export function registerTools(server: McpServer): void {
   // --- shopping list -------------------------------------------------------
   server.tool(
     'list_shopping_items',
-    'Get all items currently on the shopping list.',
+    'List all items currently on the shopping list for `listId`. Read-only. Returns an array of `ArticleDto` objects (`uuid`, `name`, `amount`, `unitId`, `categoryUuid`, `pantrySettings`, …); empty array if the list is empty. For pantry items use `list_pantry_items`; to add a new shopping item use `add_shopping_item`.',
     { ...listIdArg },
     async ({ listId }) =>
       text(
@@ -74,8 +76,15 @@ export function registerTools(server: McpServer): void {
 
   server.tool(
     'add_shopping_item',
-    'Add an item to the shopping list by name.',
-    { name: z.string().describe('Item name, e.g. "Milk".'), ...listIdArg },
+    'Add an item to the shopping list by name. The API matches `name` against the user\'s article catalog: an existing article is reused (its category, unit and price history preserved); a new article is created on first use. Returns the resulting `ArticleDto`. To add directly to the pantry instead use `add_pantry_item`; to mark an existing shopping item bought use `check_shopping_item`.',
+    {
+      name: z
+        .string()
+        .describe(
+          'Item name, e.g. "Milk". Matched case-insensitively against the article catalog; an exact match reuses the existing article.',
+        ),
+      ...listIdArg,
+    },
     async ({ name, listId }) =>
       text(
         unwrap(
@@ -89,8 +98,15 @@ export function registerTools(server: McpServer): void {
 
   server.tool(
     'check_shopping_item',
-    'Check off a shopping-list item. Depending on list settings this marks it done, removes it, or moves it to the pantry.',
-    { itemId: z.string().describe('Item uuid.'), ...listIdArg },
+    'Check off a shopping-list item. The list\'s settings decide the actual effect: `markDone` flags the item as bought (stays on the list, struck through), `removeOnCheck` deletes it, and `moveOnCheck` transfers it into the pantry. Mutates state and returns the updated row. To unconditionally remove regardless of list settings use `delete_shopping_item`; for stock changes on a pantry item use `reduce_pantry_amount`.',
+    {
+      itemId: z
+        .string()
+        .describe(
+          'Item uuid (from `list_shopping_items[].uuid` or `add_shopping_item`).',
+        ),
+      ...listIdArg,
+    },
     async ({ itemId, listId }) =>
       text(
         unwrap(
@@ -104,8 +120,15 @@ export function registerTools(server: McpServer): void {
 
   server.tool(
     'delete_shopping_item',
-    'Remove an item from the shopping list.',
-    { itemId: z.string().describe('Item uuid.'), ...listIdArg },
+    'Remove an item from the shopping list, unconditionally and irreversibly (no soft-delete, not affected by list `removeOnCheck` setting). Returns a confirmation string; the row is gone after the call returns. Use `check_shopping_item` instead if you want list-setting-dependent behaviour (mark done / move to pantry) rather than a hard delete.',
+    {
+      itemId: z
+        .string()
+        .describe(
+          'Item uuid (from `list_shopping_items[].uuid`). Hard-delete is permanent — verify before calling.',
+        ),
+      ...listIdArg,
+    },
     async ({ itemId, listId }) => {
       unwrap(
         await client().DELETE('/list/{listId}/shoppingList/{itemId}', {
@@ -119,7 +142,7 @@ export function registerTools(server: McpServer): void {
   // --- pantry --------------------------------------------------------------
   server.tool(
     'list_pantry_items',
-    'Get all items currently in the pantry.',
+    'List all items currently stocked in the pantry for `listId`. Read-only. Returns an array of `ArticleDto` objects (`uuid`, `name`, `amount` = current stock, `unitId`, `pantrySettings.earliestBestBefore` for expiry tracking, `minimumAmount`, …); empty array if the pantry is empty. For shopping items use `list_shopping_items`; for stock changes on an existing item use `reduce_pantry_amount`; for metadata changes use `update_pantry_item`.',
     { ...listIdArg },
     async ({ listId }) =>
       text(
@@ -133,11 +156,25 @@ export function registerTools(server: McpServer): void {
 
   server.tool(
     'add_pantry_item',
-    'Add an item to the pantry by name.',
+    'Add a new item to the pantry by name. The API matches `name` against the user\'s article catalog: an existing article is reused (its category, unit, price history preserved); a new article is created on first use. Returns the resulting `ArticleDto`. Use `reduce_pantry_amount` to change stock on an item already in the pantry; use `update_pantry_item` to rename or change unit / category; use `add_shopping_item` to put it on the shopping list instead.',
     {
-      name: z.string(),
-      amount: z.number().optional(),
-      unitId: z.string().optional(),
+      name: z
+        .string()
+        .describe(
+          'Item name, e.g. "Milk". Matched case-insensitively against the article catalog; matches reuse the existing article.',
+        ),
+      amount: z
+        .number()
+        .optional()
+        .describe(
+          'Initial stock amount. Defaults to 1 if omitted (server-applied).',
+        ),
+      unitId: z
+        .string()
+        .optional()
+        .describe(
+          'Unit id, e.g. "pieces", "g", "ml", "l". Defaults to "pieces" if omitted (server-applied). Discover supported ids by inspecting any existing pantry item\'s `unitId`.',
+        ),
       ...listIdArg,
     },
     async ({ name, amount, unitId, listId }) => {
@@ -165,17 +202,23 @@ export function registerTools(server: McpServer): void {
 
   server.tool(
     'reduce_pantry_amount',
-    'Change the stock amount of a pantry item. Use a negative `amountChange` to consume stock.',
+    'Change the stock of an existing pantry item by a delta. Mutates state and returns the updated `ArticleDto`. If `autoRestock` is true and the new amount lands at or below the item\'s `minimumAmount`, the item is also added to the shopping list in the same call. Use `add_pantry_item` to create a new pantry entry; use `update_pantry_item` for metadata (name / unit / category) — this tool only touches stock.',
     {
-      itemId: z.string().describe('Item uuid.'),
+      itemId: z
+        .string()
+        .describe(
+          'Item uuid (from `list_pantry_items[].uuid`). Item must already exist in the pantry — this tool does not create.',
+        ),
       amountChange: z
         .number()
-        .describe('Delta applied to the current amount; negative consumes.'),
+        .describe(
+          'Delta added to the current `amount` — negative consumes stock, positive restocks. Despite the tool name, positive values work for restocking too.',
+        ),
       autoRestock: z
         .boolean()
         .optional()
         .describe(
-          'If true and the item lands at/below its minimumAmount, also re-add it to the shopping list. Defaults to false.',
+          'If true and the resulting amount drops to or below the item\'s `minimumAmount` (with `manageMinimumAmount` enabled), the item is also added to the shopping list in the same call. Defaults to false so reads stay quiet.',
         ),
       ...listIdArg,
     },
@@ -195,18 +238,40 @@ export function registerTools(server: McpServer): void {
 
   server.tool(
     'update_pantry_item',
-    'Update an existing pantry item (rename, change unit, retag, etc.). Use `reduce_pantry_amount` for stock changes — this tool is for metadata only. Only the fields you pass are changed; everything else is preserved.',
+    'Update an existing pantry item\'s metadata (rename, change unit, category, brand, notes). Internally fetches the current `ArticleDto` and PUTs back a merged copy — only the fields you pass change; everything else (current stock, price history, image URLs, autoRestock config) round-trips unchanged. Two API calls per invocation. Returns the updated `ArticleDto`. Use `reduce_pantry_amount` for stock changes — this tool only touches metadata.',
     {
-      itemId: z.string().describe('Item uuid.'),
-      name: z.string().optional().describe('New name.'),
-      brand: z.string().nullable().optional().describe('New brand. Pass null to clear.'),
-      categoryUuid: z.string().optional().describe('New category uuid.'),
-      unitId: z.string().optional().describe('New unit id (e.g. "pieces", "g").'),
+      itemId: z
+        .string()
+        .describe(
+          'Item uuid (from `list_pantry_items[].uuid`). Item must already exist.',
+        ),
+      name: z.string().optional().describe('New name. Omit to keep current.'),
+      brand: z
+        .string()
+        .nullable()
+        .optional()
+        .describe(
+          'New brand. Omit to keep current; pass null to clear an existing brand.',
+        ),
+      categoryUuid: z
+        .string()
+        .optional()
+        .describe(
+          'New category uuid. Discover existing ones by inspecting `list_pantry_items[].categoryUuid`.',
+        ),
+      unitId: z
+        .string()
+        .optional()
+        .describe(
+          'New unit id, e.g. "pieces", "g", "ml". Changes how `amount` is displayed but does NOT convert existing stock.',
+        ),
       notes: z
         .string()
         .nullable()
         .optional()
-        .describe('Freeform notes. Pass null to clear.'),
+        .describe(
+          'Freeform notes. Omit to keep current; pass null to clear an existing note.',
+        ),
       ...listIdArg,
     },
     async ({ itemId, name, brand, categoryUuid, unitId, notes, listId }) => {
@@ -241,11 +306,28 @@ export function registerTools(server: McpServer): void {
   // --- recipes -------------------------------------------------------------
   server.tool(
     'search_recipes',
-    'Search recipes by free-text and optional filters.',
+    'Search the user\'s recipes (their own creations + public favourites) by free-text and optional category filters. Read-only and paginated — returns `{ results: RecipeDto[], totalCount, totalPages, currentPage }`. To fetch a single recipe by uuid use `get_recipe`; to delete one you own use `delete_recipe`.',
     {
-      searchString: z.string().optional(),
-      categories: z.array(z.enum(RECIPE_CATEGORIES)).optional(),
-      currentPage: z.number().int().min(1).optional(),
+      searchString: z
+        .string()
+        .optional()
+        .describe(
+          'Free-text query matched against recipe name, description, and ingredient names. Case-insensitive. Omit to list all recipes (still paginated).',
+        ),
+      categories: z
+        .array(z.enum(RECIPE_CATEGORIES))
+        .optional()
+        .describe(
+          'Optional category filter — multiple categories are OR-combined. Values must come from the recipe-categories enum (e.g. "Breakfast", "Vegetarian", "LowCarb").',
+        ),
+      currentPage: z
+        .number()
+        .int()
+        .min(1)
+        .optional()
+        .describe(
+          '1-based page index. Page size is fixed server-side. Defaults to 1.',
+        ),
     },
     async ({ searchString, categories, currentPage }) =>
       text(
@@ -259,8 +341,14 @@ export function registerTools(server: McpServer): void {
 
   server.tool(
     'get_recipe',
-    'Get a single recipe by its uuid.',
-    { recipeId: z.string() },
+    'Get a single recipe by its uuid. Read-only. Returns a full `RecipeDto` with `name`, `description`, `ingredients[]`, `steps[]`, `imageUrls[]`, `totalTime`, `categories[]`, etc. Use `search_recipes` to discover recipe uuids; use `delete_recipe` to remove one you own.',
+    {
+      recipeId: z
+        .string()
+        .describe(
+          'Recipe uuid (from `search_recipes[].results[].uuid` or `list_pantry_items[].pantrySettings.linkedRecipeUuids`).',
+        ),
+    },
     async ({ recipeId }) =>
       text(
         unwrap(
@@ -273,8 +361,14 @@ export function registerTools(server: McpServer): void {
 
   server.tool(
     'delete_recipe',
-    'Delete a recipe you own. The API rejects deletes of recipes belonging to another user; that error is surfaced to the caller.',
-    { recipeId: z.string().describe('Recipe uuid.') },
+    'Delete a recipe you own, unconditionally and irreversibly. The API rejects deletes for recipes belonging to another user with a 403; that error surfaces verbatim to the caller. Preview with `get_recipe` before calling to confirm authorship and contents.',
+    {
+      recipeId: z
+        .string()
+        .describe(
+          'Recipe uuid. Hard-delete is permanent — confirm ownership via `get_recipe` first.',
+        ),
+    },
     async ({ recipeId }) => {
       unwrap(
         await client().DELETE('/recipe/{uid}', {
@@ -288,10 +382,16 @@ export function registerTools(server: McpServer): void {
   // --- week plan -----------------------------------------------------------
   server.tool(
     'get_week_plan',
-    'Get the meal plan for a date range. Dates are YYYY-MM-DD.',
+    'List meal-plan entries between two dates (inclusive). Read-only. Returns an array of day objects — `[{ date, list: [{ type: "recipe" | "manual", uuid?, name? }, …] }, …]` — one per day that has any entries. Days with no plan are omitted from the response (so an empty array means nothing is planned in the range, not that the range is invalid). To set or clear a single day use `update_week_plan_day`.',
     {
-      from: z.string().describe('Start date, YYYY-MM-DD.'),
-      to: z.string().describe('End date, YYYY-MM-DD.'),
+      from: z
+        .string()
+        .describe(
+          'Range start (inclusive), YYYY-MM-DD. Must be ≤ `to`; same value as `to` returns one day.',
+        ),
+      to: z
+        .string()
+        .describe('Range end (inclusive), YYYY-MM-DD.'),
       ...listIdArg,
     },
     async ({ from, to, listId }) =>
@@ -306,23 +406,41 @@ export function registerTools(server: McpServer): void {
 
   server.tool(
     'update_week_plan_day',
-    'Set the planned recipes/meals for a single day (YYYY-MM-DD).',
+    'Replace the meal-plan entries for one day, identified by date. `list` is a full replacement — the day\'s previous entries are discarded. Pass an empty array to clear the day entirely. Returns the new `{ date, list }`. To read a date range use `get_week_plan`; to read a single recipe referenced in the plan use `get_recipe`.',
     {
-      date: z.string().describe('Day to set, YYYY-MM-DD.'),
+      date: z
+        .string()
+        .describe(
+          'Day to set, YYYY-MM-DD. This single day is fully replaced — adjacent days are not touched.',
+        ),
       list: z
         .array(
           z.discriminatedUnion('type', [
             z.object({
-              type: z.literal('recipe'),
-              uuid: z.string().describe('Recipe uuid.'),
+              type: z
+                .literal('recipe')
+                .describe('Reference to a saved recipe by uuid.'),
+              uuid: z
+                .string()
+                .describe(
+                  'Recipe uuid (from `search_recipes` or `get_recipe`).',
+                ),
             }),
             z.object({
-              type: z.literal('manual'),
-              name: z.string().describe('Free text meal name.'),
+              type: z
+                .literal('manual')
+                .describe(
+                  'Free-text meal not tied to a stored recipe (e.g. "leftovers", "takeout").',
+                ),
+              name: z
+                .string()
+                .describe('Free-text meal name displayed in the plan.'),
             }),
           ]),
         )
-        .describe('Entries planned for the day. Empty array clears the day.'),
+        .describe(
+          'Entries planned for the day. Each entry is either a recipe ref or a manual free-text meal. Empty array clears the day.',
+        ),
       ...listIdArg,
     },
     async ({ date, list, listId }) =>

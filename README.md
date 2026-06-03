@@ -199,10 +199,6 @@ Most tools accept an optional `listId`; if omitted they use `PANTRIST_LIST_ID`
 [multi-user isolation](./docs/AUTHENTICATION.md#multi-user-isolation)). Full
 argument and item-shape details are in [docs/TOOLS.md](./docs/TOOLS.md).
 
-> ⚠️ **Token caveat:** `search_recipes` / `get_recipe` require a Firebase or
-> OAuth token — a Pantrist `<uuid>_<secret>` API key returns 401 for those two.
-> See [the compatibility matrix](./docs/AUTHENTICATION.md#token-types-and-tool-compatibility-).
-
 All of these are **public** API endpoints (present in `/swagger-ui-json`), so
 this wrapper needs only the published spec — never the private API source. That
 keeps the door open to open-sourcing this directory as its own repo.
