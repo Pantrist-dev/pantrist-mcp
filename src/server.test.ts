@@ -99,3 +99,48 @@ test('client() forwards the request-context Bearer + path params + body', async 
   assert.equal(received[0].auth, 'Bearer tok-xyz');
   assert.deepEqual(JSON.parse(received[0].body), { name: 'Eggs' });
 });
+
+// The two new tools (update_pantry_item, delete_recipe) added in #1/#2.
+// We exercise the underlying openapi-fetch routes directly — same shape
+// the tools execute internally — so we prove the wiring without having
+// to spin up an MCP transport in the test.
+
+test('GET then PUT pantry item — the update_pantry_item path', async () => {
+  received.length = 0;
+  await tokenStore.run({ token: 'tok-xyz' }, async () => {
+    // Step 1: tool fetches the current article.
+    unwrap(
+      await client().GET('/list/{listId}/pantryList/{itemId}', {
+        params: { path: { listId: 'L9', itemId: 'I42' } },
+      }),
+    );
+    // Step 2: tool PUTs the merged article back.
+    unwrap(
+      await client().PUT('/list/{listId}/pantryList/{itemId}', {
+        params: { path: { listId: 'L9', itemId: 'I42' } },
+        body: { ok: true, name: 'New Name' } as never,
+      }),
+    );
+  });
+  assert.equal(received.length, 2);
+  assert.equal(received[0].method, 'GET');
+  assert.equal(received[0].url, '/list/L9/pantryList/I42');
+  assert.equal(received[1].method, 'PUT');
+  assert.equal(received[1].url, '/list/L9/pantryList/I42');
+  assert.deepEqual(JSON.parse(received[1].body), { ok: true, name: 'New Name' });
+});
+
+test('DELETE /recipe/{uid} — the delete_recipe path', async () => {
+  received.length = 0;
+  await tokenStore.run({ token: 'tok-xyz' }, async () => {
+    unwrap(
+      await client().DELETE('/recipe/{uid}', {
+        params: { path: { uid: 'R7' } },
+      }),
+    );
+  });
+  assert.equal(received.length, 1);
+  assert.equal(received[0].method, 'DELETE');
+  assert.equal(received[0].url, '/recipe/R7');
+  assert.equal(received[0].auth, 'Bearer tok-xyz');
+});

@@ -187,8 +187,10 @@ forwards it.
 | `list_pantry_items` | `GET /list/{listId}/pantryList` |
 | `add_pantry_item` | `POST /list/{listId}/pantryList/add-by-name` |
 | `reduce_pantry_amount` | `PUT /list/{listId}/pantryList/{itemId}/change-amount` |
+| `update_pantry_item` | `GET` + `PUT /list/{listId}/pantryList/{itemId}` (metadata-only; stock changes go through `reduce_pantry_amount`) |
 | `search_recipes` | `POST /recipe/filter` |
 | `get_recipe` | `GET /recipe/{recipeId}` |
+| `delete_recipe` | `DELETE /recipe/{recipeId}` |
 | `get_week_plan` | `GET /list/{listId}/weekPlan?from=&to=` |
 | `update_week_plan_day` | `PUT /list/{listId}/weekPlan/{date}` |
 

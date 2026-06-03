@@ -193,6 +193,51 @@ export function registerTools(server: McpServer): void {
       ),
   );
 
+  server.tool(
+    'update_pantry_item',
+    'Update an existing pantry item (rename, change unit, retag, etc.). Use `reduce_pantry_amount` for stock changes — this tool is for metadata only. Only the fields you pass are changed; everything else is preserved.',
+    {
+      itemId: z.string().describe('Item uuid.'),
+      name: z.string().optional().describe('New name.'),
+      brand: z.string().nullable().optional().describe('New brand. Pass null to clear.'),
+      categoryUuid: z.string().optional().describe('New category uuid.'),
+      unitId: z.string().optional().describe('New unit id (e.g. "pieces", "g").'),
+      notes: z
+        .string()
+        .nullable()
+        .optional()
+        .describe('Freeform notes. Pass null to clear.'),
+      ...listIdArg,
+    },
+    async ({ itemId, name, brand, categoryUuid, unitId, notes, listId }) => {
+      // PUT /pantryList/{itemId} is a FULL upsert — it replaces the row.
+      // Fetch the current article first so the caller only has to send the
+      // fields they want to change; everything else round-trips unchanged.
+      const resolvedListId = resolveListId(listId);
+      const current = unwrap(
+        await client().GET('/list/{listId}/pantryList/{itemId}', {
+          params: { path: { listId: resolvedListId, itemId } },
+        }),
+      );
+      const merged = {
+        ...current,
+        ...(name !== undefined ? { name } : {}),
+        ...(brand !== undefined ? { brand } : {}),
+        ...(categoryUuid !== undefined ? { categoryUuid } : {}),
+        ...(unitId !== undefined ? { unitId } : {}),
+        ...(notes !== undefined ? { notes } : {}),
+      };
+      return text(
+        unwrap(
+          await client().PUT('/list/{listId}/pantryList/{itemId}', {
+            params: { path: { listId: resolvedListId, itemId } },
+            body: merged,
+          }),
+        ),
+      );
+    },
+  );
+
   // --- recipes -------------------------------------------------------------
   server.tool(
     'search_recipes',
@@ -224,6 +269,20 @@ export function registerTools(server: McpServer): void {
           }),
         ),
       ),
+  );
+
+  server.tool(
+    'delete_recipe',
+    'Delete a recipe you own. The API rejects deletes of recipes belonging to another user; that error is surfaced to the caller.',
+    { recipeId: z.string().describe('Recipe uuid.') },
+    async ({ recipeId }) => {
+      unwrap(
+        await client().DELETE('/recipe/{uid}', {
+          params: { path: { uid: recipeId } },
+        }),
+      );
+      return text(`Deleted recipe ${recipeId}.`);
+    },
   );
 
   // --- week plan -----------------------------------------------------------
