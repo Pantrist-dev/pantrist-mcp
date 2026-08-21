@@ -46,8 +46,7 @@ works. `get_recipe` and `delete_recipe` are **not** affected — the rest of the
 recipe controller already moved to `AnyAuthGuard`.
 
 Fixed in pantrist-api on `claude/recipe-api-key-auth-b52s56` (both filter
-routes switched to `AnyAuthGuard` + `@AllowAnonymous`); this note goes away
-once that is deployed. Until then, use a Firebase ID token if you need
+routes switched to `AnyAuthGuard`); this note goes away once that is deployed. Until then, use a Firebase ID token if you need
 `search_recipes`, and once it ships refresh `openapi/pantrist-openapi.json`
 from the API and re-run `npm run generate:client` so the vendored spec picks up
 the `bearer` security scheme the recipe routes were missing. See
