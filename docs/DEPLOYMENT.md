@@ -17,7 +17,7 @@
 
 | Var | Purpose |
 |---|---|
-| `OAUTH_AUTHORIZE_URL` | **Required for remote OAuth.** Public URL of a browser-facing consent page that runs the user's Firebase login and then calls `POST /access-token/authorize` (e.g. `https://pantrist.app/oauth/authorize`). When unset the discovery doc falls back to the API's own JSON endpoint, which is FirebaseAuthGuard-protected and will 401 any plain-browser MCP-client navigation — the OAuth flow cannot complete without it. See [AUTHENTICATION.md](./AUTHENTICATION.md). |
+| `OAUTH_AUTHORIZE_URL` | **Required for remote OAuth.** Public URL of a browser-facing consent page that runs the user's Firebase login and then calls `POST /access-token/authorize` (e.g. `https://pantrist.app/oauth/authorize`). When unset the discovery doc falls back to the API's own JSON endpoint, which requires an authenticated session and will 401 any plain-browser MCP-client navigation — the OAuth flow cannot complete without it. See [AUTHENTICATION.md](./AUTHENTICATION.md). |
 | `OAUTH_ISSUER` | Override for the OAuth `issuer` URL advertised in `/.well-known/oauth-authorization-server`. Default: inferred from `x-forwarded-{proto,host}`. Set when the public origin can't be inferred from the request (CDN rewrites Host). |
 | `OAUTH_EXTRA_KNOWN_REDIRECT_URIS` | Comma-separated extra redirect URIs accepted at `/access-token/authorize` for the legacy consent-page flow (where no `client_id` is sent). The built-in list is wear OS + the three Alexa skill-link URLs; only override if you wire up a new platform. |
 | `OAUTH_CLIENT_ORPHAN_RETENTION_DAYS` | How many days after registration an orphan dynamic client (no `tokens` row) is kept before the prune endpoint sweeps it. Default `14`. |

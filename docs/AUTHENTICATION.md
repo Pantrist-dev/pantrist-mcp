@@ -17,25 +17,32 @@ client receives **is** the API Bearer — so this server just passes it through.
 
 ## Token types
 
-All three token types work with every tool — the previous recipe-controller
-carve-out has been removed (the recipe controller now uses `AnyAuthGuard`
-alongside the list / shopping / pantry / week-plan controllers).
+All three token types work with every tool.
 
 | Token type | All tools |
 |---|---|
-| **OAuth access token** (from `/access-token/token`) | ✅ |
-| **Firebase ID token** (e.g. copied from the app) | ✅ |
+| **OAuth access token** (from the handshake below) | ✅ |
+| **Firebase ID token** (what the Pantrist app itself sends) | ✅ |
 | **Pantrist API key** (`<uuid>_<secret>`) | ✅ |
 
-Note: the OAuth access token the API issues is a Firebase **custom token**
-(1-hour lifetime). The backend's auth guard verifies it directly; you do not
-need to exchange it for an ID token.
+The recipe tools used to be the exception: `search_recipes` answered an API key
+with `401 "Token is not verified"` while every other tool worked. That was a
+backend bug and is fixed — if you still hit it, you are pointed at an API
+deployed before 2026-08-21.
+
+Note: the OAuth access token is accepted as-is and lasts ~1 hour. There is no
+exchange step — do not try to trade it for anything else before calling.
 
 ## stdio: supply the token directly
 
-Set `PANTRIST_TOKEN`. Fastest way to get one for a PoC: log into the Pantrist
-app, open DevTools → Network, copy the `Authorization: Bearer <…>` value from
-any API request (a Firebase ID token — works with all tools).
+Set `PANTRIST_TOKEN` to a **Pantrist API key**. Generate one here:
+
+**https://www.pantrist.com/documentation/api-docs**
+
+That is the right credential for stdio and the only one that does not expire.
+The other two both die after ~1h, and stdio has nowhere to run a refresh loop —
+the server would fail every call until you pasted a new token by hand. They
+still work if you have one handy; neither is worth setting up on purpose.
 
 ## HTTP: the OAuth handshake
 

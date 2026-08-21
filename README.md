@@ -93,7 +93,7 @@ see the warning in [the OAuth dependency note](#how-the-oauth-handshake-flows).
 ## Quick start (stdio — fastest path)
 
 You can validate the whole tool set in a couple of minutes without touching
-OAuth, by using a token you already have.
+OAuth, using an API key you generate in the Pantrist web app.
 
 ```bash
 git clone https://github.com/NLueg/pantrist-mcp.git
@@ -101,11 +101,11 @@ cd pantrist-mcp
 npm install
 npm run build
 
-# Get a token: log into the Pantrist app, open DevTools → Network, copy the
-# `Authorization: Bearer <…>` value from any API request (a Firebase ID token —
-# the API accepts it directly). Or use an OAuth access_token.
+# Generate an API key at
+# https://www.pantrist.com/documentation/api-docs — it never expires,
+# which is what you want for a server that stays running.
 export PANTRIST_BASE_URL=https://api.pantrist.app
-export PANTRIST_TOKEN=<paste-token>
+export PANTRIST_TOKEN=<uuid>_<secret>
 export PANTRIST_LIST_ID=<a-list-uuid>   # optional; or call list_lists
 
 npm run dev:stdio   # or: node dist/stdio.js
@@ -124,7 +124,7 @@ npm run dev:stdio   # or: node dist/stdio.js
       "args": ["/ABSOLUTE/PATH/pantrist-mcp/dist/stdio.js"],
       "env": {
         "PANTRIST_BASE_URL": "https://api.pantrist.app",
-        "PANTRIST_TOKEN": "<your-token>",
+        "PANTRIST_TOKEN": "<uuid>_<secret>",
         "PANTRIST_LIST_ID": "<list-uuid>"
       }
     }

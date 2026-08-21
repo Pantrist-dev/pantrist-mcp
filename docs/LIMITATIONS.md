@@ -14,8 +14,11 @@ once against `https://api.pantrist.app` and confirm:
 - `lastModified` is actually populated on items (it's written only when
   provided — see the n8n/trigger discussion),
 - `check_shopping_item` returns something sensible across list settings
-  (delete / move-to-pantry / move-to-cart),
-- the recipe tools behave with the token type you use.
+  (delete / move-to-pantry / move-to-cart).
+
+The token-type question that used to sit in this list is settled: every tool,
+recipe tools included, works with all three token types — see
+[AUTHENTICATION.md](./AUTHENTICATION.md#token-types).
 
 ## Expired-token handling 🟠
 
@@ -36,12 +39,21 @@ array through (~20+ fields per item). For a large pantry this is a lot of tokens
 and can crowd the model's context. Options if it bites: project to essential
 fields, paginate, or expose the list as an MCP **resource** instead of a tool.
 
-## Recipe tools need the right token 🟡
+## The vendored OpenAPI snapshot drifts 🟢
 
-`search_recipes` / `get_recipe` go through the backend's `FirebaseAuthGuard`,
-which rejects the `<uuid>_<secret>` API key. With an API key those two tools
-return 401 while everything else works. See
-[AUTHENTICATION.md](./AUTHENTICATION.md#token-types-and-tool-compatibility-).
+`openapi/pantrist-openapi.json` is a checked-in copy of the published spec and
+`src/generated/pantrist-api.ts` is generated from it, so both lag the API until
+someone refreshes them. The current copy still shows the recipe endpoints as
+needing no authentication, which stopped being true on 2026-08-21.
+
+Nothing breaks from this: `openapi-typescript` emits request/response types
+only, so the spec's auth metadata never reaches the generated client. It is
+documentation drift, not a runtime one. To clear it:
+
+```bash
+curl -fsS https://api.pantrist.app/swagger-ui-json -o openapi/pantrist-openapi.json
+npm run generate:client
+```
 
 ## No server-initiated streaming (stateless) 🟡
 
