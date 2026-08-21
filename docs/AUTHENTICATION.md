@@ -17,25 +17,28 @@ client receives **is** the API Bearer — so this server just passes it through.
 
 ## Token types
 
-All three token types work with every tool **except `search_recipes`**, which
-is waiting on a backend deploy.
+All three token types work with every tool.
 
-| Token type | `search_recipes` | Every other tool |
-|---|---|---|
-| **OAuth access token** (from `/access-token/token`) | ✅ | ✅ |
-| **Firebase ID token** (e.g. copied from the app) | ✅ | ✅ |
-| **Pantrist API key** (`<uuid>_<secret>`) | ❌ 401 until deployed | ✅ |
+| Token type | All tools |
+|---|---|
+| **OAuth access token** (from `/access-token/token`) | ✅ |
+| **Firebase ID token** (e.g. copied from the app) | ✅ |
+| **Pantrist API key** (`<uuid>_<secret>`) | ✅ |
 
-The recipe-controller carve-out was only *mostly* removed. `POST /recipe/filter`
-kept `FirebaseAuthGuard`, which understands Firebase ID / custom tokens, the
-OAuth JWT and the signed `x-api-key` header — but not a `<uuid>_<secret>` API
-key, which it rejects with `401 "Token is not verified"`. `GET /recipe/{uid}`
-and `DELETE /recipe/{uid}` had already moved to `AnyAuthGuard` and accept every
-token type, so `get_recipe` and `delete_recipe` were never affected.
+The recipe-controller carve-out is fully gone as of
+[pantrist-api#291](https://github.com/Pantrist-dev/pantrist-api/pull/291).
+`POST /recipe/filter` (behind `search_recipes`) was the last route still on
+`FirebaseAuthGuard`, which understands Firebase ID / custom tokens, the OAuth
+JWT and the signed `x-api-key` header — but not a `<uuid>_<secret>` API key,
+which it rejected with `401 "Token is not verified"`. It now uses `AnyAuthGuard`
+like the rest of the controller. `get_recipe` and `delete_recipe` were never
+affected; those routes had already moved.
 
-Fixed in [pantrist-api#291](https://github.com/Pantrist-dev/pantrist-api/pull/291);
-drop the ❌ column once that is live. See
-[LIMITATIONS.md](./LIMITATIONS.md#search_recipes-rejects-api-keys-until-the-api-ships-the-guard-fix-).
+You can tell the two guards apart from the 401 body if this ever regresses:
+`FirebaseAuthGuard` says `"detail": "Token is not verified"`, `AnyAuthGuard`
+says `"detail": "No valid authentication method provided"` with
+`"code": "AUTH_INVALID_TOKEN"`. The latter on a recipe route means your token
+is bad, not that the route is on the wrong guard.
 
 Note: the OAuth access token the API issues is a Firebase **custom token**
 (1-hour lifetime). The backend's auth guard verifies it directly; you do not
@@ -49,8 +52,7 @@ stdio server would then fail every call until you paste a new one.
 
 Fastest way to get a token for a PoC: log into the Pantrist app, open
 DevTools → Network, copy the `Authorization: Bearer <…>` value from any API
-request (a Firebase ID token). That is also the workaround for `search_recipes`
-while the guard fix above is undeployed.
+request (a Firebase ID token).
 
 ## HTTP: the OAuth handshake
 

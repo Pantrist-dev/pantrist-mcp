@@ -14,8 +14,11 @@ once against `https://api.pantrist.app` and confirm:
 - `lastModified` is actually populated on items (it's written only when
   provided — see the n8n/trigger discussion),
 - `check_shopping_item` returns something sensible across list settings
-  (delete / move-to-pantry / move-to-cart),
-- the recipe tools behave with the token type you use.
+  (delete / move-to-pantry / move-to-cart).
+
+The token-type question that used to sit in this list is settled: every tool,
+recipe tools included, works with all three token types — see
+[AUTHENTICATION.md](./AUTHENTICATION.md#token-types).
 
 ## Expired-token handling 🟠
 
@@ -36,28 +39,23 @@ array through (~20+ fields per item). For a large pantry this is a lot of tokens
 and can crowd the model's context. Options if it bites: project to essential
 fields, paginate, or expose the list as an MCP **resource** instead of a tool.
 
-## `search_recipes` rejects API keys until the API ships the guard fix 🟡
+## The vendored OpenAPI snapshot is behind the API 🟢
 
-`search_recipes` posts to `/recipe/filter`, which is still on the backend's
-`FirebaseAuthGuard`. That guard only understands Firebase ID / custom tokens,
-the OAuth JWT and the signed `x-api-key` header, so a `<uuid>_<secret>` API key
-comes back as `401 {"detail":"Token is not verified"}` while every other tool
-works. `get_recipe` and `delete_recipe` are **not** affected — the rest of the
-recipe controller already moved to `AnyAuthGuard`.
+`openapi/pantrist-openapi.json` is a checked-in copy of the published spec, and
+`src/generated/pantrist-api.ts` is generated from it. In the current copy the
+recipe operations carry no `security` entry at all (`security: null`, unlike
+every `/list/**` route) — that was accurate when the recipe controller had no
+`@ApiBearerAuth()`, and stopped being accurate with
+[pantrist-api#291](https://github.com/Pantrist-dev/pantrist-api/pull/291).
 
-Fixed in [pantrist-api#291](https://github.com/Pantrist-dev/pantrist-api/pull/291),
-which moves the filter routes onto `AnyAuthGuard`. Until that deploys, use a
-Firebase ID token if you need `search_recipes`.
+Nothing is broken by this: `openapi-typescript` emits request/response types
+only, so the `security` field never reaches the generated client. It is a
+documentation drift, not a runtime one. To clear it:
 
-Two follow-ups once it ships:
-
-1. Refresh `openapi/pantrist-openapi.json` from the API and re-run
-   `npm run generate:client`. The recipe routes carried no `security` entry at
-   all in the vendored spec (unlike every `/list/**` route); the PR adds
-   `@ApiBearerAuth()`, so the regenerated spec will finally mark them as
-   bearer-secured.
-2. Delete this section and the ❌ column in
-   [AUTHENTICATION.md](./AUTHENTICATION.md#token-types).
+```bash
+curl -fsS https://api.pantrist.app/swagger-ui-json -o openapi/pantrist-openapi.json
+npm run generate:client
+```
 
 ## No server-initiated streaming (stateless) 🟡
 
