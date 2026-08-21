@@ -39,17 +39,15 @@ array through (~20+ fields per item). For a large pantry this is a lot of tokens
 and can crowd the model's context. Options if it bites: project to essential
 fields, paginate, or expose the list as an MCP **resource** instead of a tool.
 
-## The vendored OpenAPI snapshot is behind the API 🟢
+## The vendored OpenAPI snapshot drifts 🟢
 
-`openapi/pantrist-openapi.json` is a checked-in copy of the published spec, and
-`src/generated/pantrist-api.ts` is generated from it. In the current copy the
-recipe operations carry no `security` entry at all (`security: null`, unlike
-every `/list/**` route) — that was accurate when the recipe controller had no
-`@ApiBearerAuth()`, and stopped being accurate with
-[pantrist-api#291](https://github.com/Pantrist-dev/pantrist-api/pull/291).
+`openapi/pantrist-openapi.json` is a checked-in copy of the published spec and
+`src/generated/pantrist-api.ts` is generated from it, so both lag the API until
+someone refreshes them. The current copy still shows the recipe endpoints as
+needing no authentication, which stopped being true on 2026-08-21.
 
-Nothing is broken by this: `openapi-typescript` emits request/response types
-only, so the `security` field never reaches the generated client. It is a
+Nothing breaks from this: `openapi-typescript` emits request/response types
+only, so the spec's auth metadata never reaches the generated client. It is
 documentation drift, not a runtime one. To clear it:
 
 ```bash

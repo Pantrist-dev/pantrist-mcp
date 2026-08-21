@@ -102,7 +102,7 @@ npm install
 npm run build
 
 # Generate an API key at
-# https://www.pantrist.com/de-DE/documentation/api-docs — it never expires,
+# https://www.pantrist.com/documentation/api-docs — it never expires,
 # which is what you want for a server that stays running.
 export PANTRIST_BASE_URL=https://api.pantrist.app
 export PANTRIST_TOKEN=<uuid>_<secret>

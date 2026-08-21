@@ -21,41 +21,28 @@ All three token types work with every tool.
 
 | Token type | All tools |
 |---|---|
-| **OAuth access token** (from `/access-token/token`) | ✅ |
-| **Firebase ID token** (e.g. copied from the app) | ✅ |
+| **OAuth access token** (from the handshake below) | ✅ |
+| **Firebase ID token** (what the Pantrist app itself sends) | ✅ |
 | **Pantrist API key** (`<uuid>_<secret>`) | ✅ |
 
-The recipe-controller carve-out is fully gone as of
-[pantrist-api#291](https://github.com/Pantrist-dev/pantrist-api/pull/291).
-`POST /recipe/filter` (behind `search_recipes`) was the last route still on
-`FirebaseAuthGuard`, which understands Firebase ID / custom tokens, the OAuth
-JWT and the signed `x-api-key` header — but not a `<uuid>_<secret>` API key,
-which it rejected with `401 "Token is not verified"`. It now uses `AnyAuthGuard`
-like the rest of the controller. `get_recipe` and `delete_recipe` were never
-affected; those routes had already moved.
+The recipe tools used to be the exception: `search_recipes` answered an API key
+with `401 "Token is not verified"` while every other tool worked. That was a
+backend bug and is fixed — if you still hit it, you are pointed at an API
+deployed before 2026-08-21.
 
-You can tell the two guards apart from the 401 body if this ever regresses:
-`FirebaseAuthGuard` says `"detail": "Token is not verified"`, `AnyAuthGuard`
-says `"detail": "No valid authentication method provided"` with
-`"code": "AUTH_INVALID_TOKEN"`. The latter on a recipe route means your token
-is bad, not that the route is on the wrong guard.
-
-Note: the OAuth access token the API issues is a Firebase **custom token**
-(1-hour lifetime). The backend's auth guard verifies it directly; you do not
-need to exchange it for an ID token.
+Note: the OAuth access token is accepted as-is and lasts ~1 hour. There is no
+exchange step — do not try to trade it for anything else before calling.
 
 ## stdio: supply the token directly
 
 Set `PANTRIST_TOKEN` to a **Pantrist API key**. Generate one here:
 
-**https://www.pantrist.com/de-DE/documentation/api-docs**
+**https://www.pantrist.com/documentation/api-docs**
 
 That is the right credential for stdio and the only one that does not expire.
-A Firebase ID token dies after ~1h, and an OAuth access token after exactly the
-same hour (it *is* a Firebase custom token, see the note above) — a
-long-running stdio server has nowhere to run a refresh loop, so it would fail
-every call until you pasted a new one by hand. Both still work if you have one
-handy; neither is worth setting up on purpose.
+The other two both die after ~1h, and stdio has nowhere to run a refresh loop —
+the server would fail every call until you pasted a new token by hand. They
+still work if you have one handy; neither is worth setting up on purpose.
 
 ## HTTP: the OAuth handshake
 
