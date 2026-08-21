@@ -46,13 +46,16 @@ need to exchange it for an ID token.
 
 ## stdio: supply the token directly
 
-Set `PANTRIST_TOKEN`. For anything long-lived, use a **Pantrist API key** — it
-does not expire, whereas a Firebase ID token dies after ~1h and a long-running
-stdio server would then fail every call until you paste a new one.
+Set `PANTRIST_TOKEN` to a **Pantrist API key**. Generate one here:
 
-Fastest way to get a token for a PoC: log into the Pantrist app, open
-DevTools → Network, copy the `Authorization: Bearer <…>` value from any API
-request (a Firebase ID token).
+**https://www.pantrist.com/de-DE/documentation/api-docs**
+
+That is the right credential for stdio and the only one that does not expire.
+A Firebase ID token dies after ~1h, and an OAuth access token after exactly the
+same hour (it *is* a Firebase custom token, see the note above) — a
+long-running stdio server has nowhere to run a refresh loop, so it would fail
+every call until you pasted a new one by hand. Both still work if you have one
+handy; neither is worth setting up on purpose.
 
 ## HTTP: the OAuth handshake
 
