@@ -17,15 +17,22 @@ client receives **is** the API Bearer — so this server just passes it through.
 
 ## Token types
 
-All three token types work with every tool — the previous recipe-controller
-carve-out has been removed (the recipe controller now uses `AnyAuthGuard`
-alongside the list / shopping / pantry / week-plan controllers).
+All three token types work with every tool **except `search_recipes`**, which
+is still waiting on a backend deploy.
 
-| Token type | All tools |
-|---|---|
-| **OAuth access token** (from `/access-token/token`) | ✅ |
-| **Firebase ID token** (e.g. copied from the app) | ✅ |
-| **Pantrist API key** (`<uuid>_<secret>`) | ✅ |
+| Token type | `search_recipes` | Every other tool |
+|---|---|---|
+| **OAuth access token** (from `/access-token/token`) | ✅ | ✅ |
+| **Firebase ID token** (e.g. copied from the app) | ✅ | ✅ |
+| **Pantrist API key** (`<uuid>_<secret>`) | ❌ 401 until deployed | ✅ |
+
+The recipe-controller carve-out was only *mostly* removed: `POST /recipe/filter`
+(and its `/paginated` sibling) kept `FirebaseAuthGuard`, which rejects the
+`<uuid>_<secret>` API key with `401 "Token is not verified"`, while
+`GET /recipe/{uid}` and `DELETE /recipe/{uid}` moved to `AnyAuthGuard` and
+accept every token type. The remaining two routes are fixed in pantrist-api on
+`claude/recipe-api-key-auth-b52s56`; drop the ❌ column once it is live. See
+[LIMITATIONS.md](./LIMITATIONS.md#search_recipes-rejects-api-keys-until-the-api-ships-the-guard-fix-).
 
 Note: the OAuth access token the API issues is a Firebase **custom token**
 (1-hour lifetime). The backend's auth guard verifies it directly; you do not
@@ -33,9 +40,14 @@ need to exchange it for an ID token.
 
 ## stdio: supply the token directly
 
-Set `PANTRIST_TOKEN`. Fastest way to get one for a PoC: log into the Pantrist
-app, open DevTools → Network, copy the `Authorization: Bearer <…>` value from
-any API request (a Firebase ID token — works with all tools).
+Set `PANTRIST_TOKEN`. For anything long-lived, use a **Pantrist API key** — it
+does not expire, whereas a Firebase ID token dies after ~1h and a long-running
+stdio server would then fail every call until you paste a new one.
+
+Fastest way to get a token for a PoC: log into the Pantrist app, open
+DevTools → Network, copy the `Authorization: Bearer <…>` value from any API
+request (a Firebase ID token). That is also the workaround for `search_recipes`
+while the guard fix above is undeployed.
 
 ## HTTP: the OAuth handshake
 

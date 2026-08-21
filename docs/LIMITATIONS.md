@@ -36,12 +36,22 @@ array through (~20+ fields per item). For a large pantry this is a lot of tokens
 and can crowd the model's context. Options if it bites: project to essential
 fields, paginate, or expose the list as an MCP **resource** instead of a tool.
 
-## Recipe tools need the right token 🟡
+## `search_recipes` rejects API keys until the API ships the guard fix 🟡
 
-`search_recipes` / `get_recipe` go through the backend's `FirebaseAuthGuard`,
-which rejects the `<uuid>_<secret>` API key. With an API key those two tools
-return 401 while everything else works. See
-[AUTHENTICATION.md](./AUTHENTICATION.md#token-types-and-tool-compatibility-).
+`search_recipes` posts to `/recipe/filter`, which is still on the backend's
+`FirebaseAuthGuard`. That guard only understands Firebase ID / custom tokens,
+the OAuth JWT and the signed `x-api-key` header, so a `<uuid>_<secret>` API key
+comes back as `401 {"detail":"Token is not verified"}` while every other tool
+works. `get_recipe` and `delete_recipe` are **not** affected — the rest of the
+recipe controller already moved to `AnyAuthGuard`.
+
+Fixed in pantrist-api on `claude/recipe-api-key-auth-b52s56` (both filter
+routes switched to `AnyAuthGuard` + `@AllowAnonymous`); this note goes away
+once that is deployed. Until then, use a Firebase ID token if you need
+`search_recipes`, and once it ships refresh `openapi/pantrist-openapi.json`
+from the API and re-run `npm run generate:client` so the vendored spec picks up
+the `bearer` security scheme the recipe routes were missing. See
+[AUTHENTICATION.md](./AUTHENTICATION.md#token-types).
 
 ## No server-initiated streaming (stateless) 🟡
 
