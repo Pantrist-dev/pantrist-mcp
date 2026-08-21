@@ -18,7 +18,7 @@ client receives **is** the API Bearer — so this server just passes it through.
 ## Token types
 
 All three token types work with every tool **except `search_recipes`**, which
-is still waiting on a backend deploy.
+is waiting on a backend deploy.
 
 | Token type | `search_recipes` | Every other tool |
 |---|---|---|
@@ -26,12 +26,15 @@ is still waiting on a backend deploy.
 | **Firebase ID token** (e.g. copied from the app) | ✅ | ✅ |
 | **Pantrist API key** (`<uuid>_<secret>`) | ❌ 401 until deployed | ✅ |
 
-The recipe-controller carve-out was only *mostly* removed: `POST /recipe/filter`
-(and its `/paginated` sibling) kept `FirebaseAuthGuard`, which rejects the
-`<uuid>_<secret>` API key with `401 "Token is not verified"`, while
-`GET /recipe/{uid}` and `DELETE /recipe/{uid}` moved to `AnyAuthGuard` and
-accept every token type. The remaining two routes are fixed in pantrist-api on
-`claude/recipe-api-key-auth-b52s56`; drop the ❌ column once it is live. See
+The recipe-controller carve-out was only *mostly* removed. `POST /recipe/filter`
+kept `FirebaseAuthGuard`, which understands Firebase ID / custom tokens, the
+OAuth JWT and the signed `x-api-key` header — but not a `<uuid>_<secret>` API
+key, which it rejects with `401 "Token is not verified"`. `GET /recipe/{uid}`
+and `DELETE /recipe/{uid}` had already moved to `AnyAuthGuard` and accept every
+token type, so `get_recipe` and `delete_recipe` were never affected.
+
+Fixed in [pantrist-api#291](https://github.com/Pantrist-dev/pantrist-api/pull/291);
+drop the ❌ column once that is live. See
 [LIMITATIONS.md](./LIMITATIONS.md#search_recipes-rejects-api-keys-until-the-api-ships-the-guard-fix-).
 
 Note: the OAuth access token the API issues is a Firebase **custom token**
