@@ -4,7 +4,7 @@
 # Runs `tsc` against the full source tree. devDependencies (tsx, typescript,
 # @types/*) are needed at this stage to type-check and emit dist/, then thrown
 # away before we ship the runtime image.
-FROM node:22-slim AS builder
+FROM node:24-slim AS builder
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # --- runtime ----------------------------------------------------------------
-FROM node:22-slim
+FROM node:24-slim
 
 WORKDIR /app
 ENV NODE_ENV=production
