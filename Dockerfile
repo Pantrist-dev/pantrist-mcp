@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.26
+# syntax=docker/dockerfile:1.27
 
 # --- builder ----------------------------------------------------------------
 # Runs `tsc` against the full source tree. devDependencies (tsx, typescript,
