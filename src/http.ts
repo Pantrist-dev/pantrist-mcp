@@ -1,7 +1,7 @@
 import express from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createServer } from './server.js';
-import { BASE, tokenStore } from './api.js';
+import { AUTH_SERVER, BASE, tokenStore } from './api.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const PUBLIC_URL = (
@@ -38,12 +38,13 @@ app.get('/healthz', (_req, res) => res.json({ status: 'ok' }));
  * RFC 9728 Protected Resource Metadata. The MCP client fetches this (pointed
  * here by the 401 `WWW-Authenticate` challenge below) to learn which
  * Authorization Server to run the OAuth flow against — the Pantrist API,
- * whose discovery + DCR + token endpoints handle the rest.
+ * whose discovery + DCR + token endpoints handle the rest. Always its public
+ * URL (`AUTH_SERVER`), never the in-cluster `BASE` the REST calls may use.
  */
 app.get(PRM_PATH, (_req, res) => {
   res.json({
     resource: PUBLIC_URL,
-    authorization_servers: [BASE],
+    authorization_servers: [AUTH_SERVER],
     bearer_methods_supported: ['header'],
   });
 });
@@ -131,7 +132,7 @@ app.delete('/mcp', (_req, res) => res.status(405).set('Allow', 'POST').end());
 
 const httpServer = app.listen(PORT, () => {
   console.error(
-    `[pantrist-mcp] Streamable HTTP server on ${PUBLIC_URL} (REST base ${BASE})` +
+    `[pantrist-mcp] Streamable HTTP server on ${PUBLIC_URL} (REST base ${BASE}, auth server ${AUTH_SERVER})` +
       (dnsProtection ? ' [DNS-rebinding protection on]' : ''),
   );
 });

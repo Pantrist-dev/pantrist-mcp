@@ -4,7 +4,8 @@
 
 | Var | Transport | Default | Purpose |
 |---|---|---|---|
-| `PANTRIST_BASE_URL` | both | `https://api.pantrist.app` | REST API base (no trailing slash). |
+| `PANTRIST_BASE_URL` | both | `https://api.pantrist.app` | REST API base (no trailing slash). May be an in-cluster address. |
+| `PANTRIST_AUTH_SERVER_URL` | http | `PANTRIST_BASE_URL` | Public URL of the Pantrist API, advertised as the Authorization Server in resource metadata. **Required when `PANTRIST_BASE_URL` is not publicly reachable**, otherwise MCP clients cannot register (claude.ai: "Registrierung beim Anmeldedienst fehlgeschlagen"). |
 | `PANTRIST_TOKEN` | stdio | — | Bearer token for all calls. See [AUTHENTICATION.md](./AUTHENTICATION.md). |
 | `PANTRIST_LIST_ID` | stdio | — | Default `listId` when a tool omits it. **Ignored in HTTP mode.** |
 | `PORT` | http | `8787` | Listen port. |
@@ -86,6 +87,9 @@ Add it in Claude as a **Custom Connector** with URL `https://mcp.pantrist.app/mc
 - Preserve the `Authorization` header.
 - Set `MCP_PUBLIC_URL` to the external HTTPS URL so the advertised
   `resource` matches what the client connected to.
+- If `PANTRIST_BASE_URL` points at an in-cluster Service, set
+  `PANTRIST_AUTH_SERVER_URL` to the API's public URL. MCP clients run the
+  OAuth flow from outside the cluster.
 - If the ingress already pins the `Host`, DNS-rebinding protection is optional;
   otherwise set `MCP_ALLOWED_HOSTS` to your external host.
 
@@ -100,6 +104,7 @@ self-contained (token in the header, fresh server instance per request).
 - [ ] TLS in front of the server.
 - [ ] `MCP_ALLOWED_HOSTS` / `MCP_ALLOWED_ORIGINS` set if not behind a Host-pinning ingress.
 - [ ] `MCP_PUBLIC_URL` is the exact external URL.
+- [ ] `GET /.well-known/oauth-protected-resource` lists a publicly reachable `authorization_servers` entry.
 - [ ] No secrets baked into the image — tokens arrive per request (HTTP) or via env (stdio).
 - [ ] Consider an upstream rate limit; the server forwards any valid Pantrist token but does not rate-limit (the API does its own throttling).
 

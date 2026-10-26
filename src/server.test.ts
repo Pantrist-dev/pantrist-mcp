@@ -37,6 +37,7 @@ const {
   tokenStore,
   unwrap,
   resolveListId,
+  authServerUrl,
   enableStdioDefaults,
   resetStdioDefaults,
 } = await import('./api.js');
@@ -48,6 +49,18 @@ after(() => echo.close());
 afterEach(() => {
   resetStdioDefaults();
   delete process.env.PANTRIST_LIST_ID;
+});
+
+test('authServerUrl falls back to the REST base', () => {
+  assert.equal(authServerUrl(undefined), `http://127.0.0.1:${port}`);
+  assert.equal(authServerUrl('  '), `http://127.0.0.1:${port}`);
+});
+
+test('authServerUrl advertises the public API when the REST base is internal', () => {
+  assert.equal(
+    authServerUrl('https://api.pantrist.app/'),
+    'https://api.pantrist.app',
+  );
 });
 
 test('unwrap returns data on a 2xx', () => {

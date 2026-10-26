@@ -8,6 +8,19 @@ export const BASE = (
 ).replace(/\/+$/, '');
 
 /**
+ * Authorization Server advertised to MCP clients in the protected resource
+ * metadata. MCP clients (claude.ai, …) run discovery, client registration and
+ * the token exchange against it from the outside, so it must be the API's
+ * public URL. It differs from `BASE` when the REST calls go to an in-cluster
+ * address, which no MCP client can reach.
+ */
+export function authServerUrl(override: string | undefined): string {
+  return (override?.trim() || BASE).replace(/\/+$/, '');
+}
+
+export const AUTH_SERVER = authServerUrl(process.env.PANTRIST_AUTH_SERVER_URL);
+
+/**
  * Per-request token context. The HTTP transport runs each MCP request inside
  * `tokenStore.run({ token }, …)` with the caller's Bearer token; the stdio
  * transport has no per-request token, so we fall back to `PANTRIST_TOKEN`.
