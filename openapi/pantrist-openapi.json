@@ -1,8 +1,34 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/recipe/plan-stats": {
+      "get": {
+        "operationId": "RecipeController_getPlanStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RecipePlanStatsDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Past week-plan stats per recipe across all of the user lists",
+        "tags": [
+          "Recipe"
+        ]
+      }
+    },
     "/recipe/filter": {
       "post": {
+        "description": "Browseable without an account. When a token is supplied it personalises (private recipes, pantry hydration, own-recipe inclusion via userUidToInclude); anonymous callers get the public catalogue.",
         "operationId": "RecipeController_getByFilter",
         "parameters": [],
         "requestBody": {
@@ -30,7 +56,94 @@
             }
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "summary": "Get recipes matching a complex filter",
+        "tags": [
+          "Recipe"
+        ]
+      }
+    },
+    "/recipe/filter/paginated": {
+      "post": {
+        "description": "Same filtering as POST /recipe/filter, but with correct LIMIT/OFFSET pagination: each page returns its own 10-item window. The legacy POST /recipe/filter returns a growing rows-1..N*10 window and is kept for backwards compatibility — new clients should use this endpoint. Browseable without an account; personalisation kicks in when a token is supplied.",
+        "operationId": "RecipeController_getByFilterPaginated",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiFilterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One page of recipes (max 10)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RecipeDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get recipes matching a complex filter (paginated)",
+        "tags": [
+          "Recipe"
+        ]
+      }
+    },
+    "/recipe/match-state": {
+      "post": {
+        "description": "Returns matching_count / ingredient_count / missingIngredients per requested uuid. Lets the recipe overview and the detail page show have/missing badges without forcing a pantry-filtered list query: the app batches the uuids currently in view and pulls just the match summary for them. Capped at 50 uuids per request. With a token the pantry is hydrated server-side from the caller lists; without one, pass the device's pantry in `ingredients`. Staples are scored from the recipe side either way, so they come back even for an empty pantry. Only recipes the caller may see are reported on.",
+        "operationId": "RecipeController_getMatchState",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeMatchStateRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One entry per requested uuid (in any order).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RecipeMatchStateDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Score a batch of recipes against the caller pantry",
         "tags": [
           "Recipe"
         ]
@@ -173,6 +286,7 @@
         ]
       },
       "get": {
+        "description": "Anonymous-friendly: callable with a Firebase token, a custom API key, a signed x-api-key, or with no credentials at all. When a user identity is resolved, the caller also sees their own private recipes and those of connected list users.",
         "operationId": "RecipeController_getRecipe",
         "parameters": [
           {
@@ -198,6 +312,82 @@
           }
         },
         "summary": "Get a recipe by UUID",
+        "tags": [
+          "Recipe"
+        ]
+      }
+    },
+    "/recipe/swipe/deck": {
+      "post": {
+        "description": "Returns fresh cards every call: recipes the user has already liked are excluded forever and recipes they skipped are excluded for a recycle window, so planning sessions keep surfacing different recipes. Accepts the full recipe filter (dietaryStyles, excludeAllergens, ingredients/pantry, language, time, …). Browseable without an account; when a token *is* supplied the deck personalises (excludes already-swiped recipes, applies pantry hydration).",
+        "operationId": "RecipeSwipeController_getDeck",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeDeckRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "A deck of recipes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RecipeDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a randomised deck of recipes the user has not swiped yet",
+        "tags": [
+          "Recipe"
+        ]
+      }
+    },
+    "/recipe/swipe": {
+      "post": {
+        "description": "On 'like' you may pass a weekPlan target to plan the recipe straight into a household day.",
+        "operationId": "RecipeSwipeController_swipe",
+        "parameters": [
+          {
+            "name": "x-socket-id",
+            "required": false,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwipeDecisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Swipe recorded"
+          }
+        },
+        "summary": "Record a swipe decision (like/skip)",
         "tags": [
           "Recipe"
         ]
@@ -996,6 +1186,101 @@
         ]
       }
     },
+    "/list/{listId}/articleCatalog/overlay": {
+      "get": {
+        "operationId": "ListArticleCatalogController_getArticleCatalogOverlay",
+        "parameters": [
+          {
+            "name": "listId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArticleCatalogOverlayDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a list's catalog as overlay on the default catalog",
+        "tags": [
+          "ArticleCatalog"
+        ]
+      },
+      "put": {
+        "description": "Stores exactly `rows` on the default catalog of `seedLang` and puts the list on the overlay. 409 `CATALOG_OVERLAY_UNAVAILABLE`: the list is kept legacy, replace it with `PUT :listId/articleCatalog` instead. 400 `CATALOG_SEED_LANGUAGE_UNKNOWN` / `CATALOG_TOMBSTONE_NOT_SEED` for an unknown language or a tombstone without a `seed:` uuid.",
+        "operationId": "ListArticleCatalogController_replaceArticleCatalogOverlay",
+        "parameters": [
+          {
+            "name": "listId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-socket-id",
+            "required": false,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArticleCatalogOverlayDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArticleCatalogOverlayDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown seedLang or invalid tombstone"
+          },
+          "409": {
+            "description": "The list is kept legacy"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Replace a list's catalog with an overlay on the default catalog",
+        "tags": [
+          "ArticleCatalog"
+        ]
+      }
+    },
     "/list/{listId}/articleCatalog/{itemId}": {
       "put": {
         "operationId": "ListArticleCatalogController_upsertArticleCatalog",
@@ -1045,6 +1330,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "CATALOG_ITEM_ID_RESERVED: the item id `overlay` is reserved"
           }
         },
         "security": [
@@ -1088,6 +1376,9 @@
         "responses": {
           "204": {
             "description": ""
+          },
+          "400": {
+            "description": "CATALOG_ITEM_ID_RESERVED: the item id `overlay` is reserved"
           }
         },
         "security": [
@@ -1098,6 +1389,78 @@
         "summary": "Delete a catalog article",
         "tags": [
           "ArticleCatalog"
+        ]
+      }
+    },
+    "/list/{listId}/purchases/aisle-order/markets": {
+      "get": {
+        "operationId": "ListPurchasesController_getAisleOrderMarkets",
+        "parameters": [
+          {
+            "name": "listId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AisleOrderMarketsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Markets with a learned aisle order, without the order itself. For every account: the app tells free users once there is one.",
+        "tags": [
+          "Purchases"
+        ]
+      }
+    },
+    "/list/{listId}/purchases/aisle-order": {
+      "get": {
+        "operationId": "ListPurchasesController_getAisleOrder",
+        "parameters": [
+          {
+            "name": "listId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AisleOrdersDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Learned aisle order per market: where categories and products are checked off within a shopping trip, from the last 180 days.",
+        "tags": [
+          "Purchases"
         ]
       }
     },
@@ -1155,7 +1518,7 @@
             "bearer": []
           }
         ],
-        "summary": "Get all purchases for a list. Optionally filter by from/to ISO dates.",
+        "summary": "Get the purchases of a list in a date range (from/to as YYYY-MM-DD, both inclusive), newest first. Without both, every purchase. For the history use `/purchases/recent`.",
         "tags": [
           "Purchases"
         ]
@@ -1213,7 +1576,111 @@
         ]
       }
     },
+    "/list/{listId}/purchases/recent": {
+      "get": {
+        "operationId": "ListPurchasesController_getRecentPurchases",
+        "parameters": [
+          {
+            "name": "listId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "before",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Page size, 50 by default, at most 200.",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "until",
+            "required": false,
+            "in": "query",
+            "description": "YYYY-MM-DD: start the history at this day instead of today (the overview's date picker). Kept for every page of one walk.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchasePageDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Purchase history, newest first, paged. Follow `nextCursor` via `before` until it is absent.",
+        "tags": [
+          "Purchases"
+        ]
+      }
+    },
     "/list/{listId}/purchases/{purchaseRowId}": {
+      "get": {
+        "operationId": "ListPurchasesController_getPurchase",
+        "parameters": [
+          {
+            "name": "listId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "purchaseRowId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchasedItemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a single purchase by its row ID",
+        "tags": [
+          "Purchases"
+        ]
+      },
       "patch": {
         "operationId": "ListPurchasesController_updatePurchase",
         "parameters": [
@@ -1608,6 +2075,148 @@
         ]
       }
     },
+    "/list/{listId}/weekPlan/{date}/entries": {
+      "post": {
+        "description": "Unlike PUT, which replaces the whole day with what the caller has, this leaves entries the caller has not seen yet (planned on another device) alone. Adding an entry the day already holds changes nothing, so a retried request never plans a recipe twice. Returns the whole day.",
+        "operationId": "ListWeekPlanController_addEntry",
+        "parameters": [
+          {
+            "name": "listId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-socket-id",
+            "required": false,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WeekPlanReceiptDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeekPlanDayDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Add one entry to a day and keep the others",
+        "tags": [
+          "WeekPlan"
+        ]
+      },
+      "delete": {
+        "description": "Removes the recipe `uuid` (type recipe) or the manual entry `name` (type manual). Removing an entry the day does not hold changes nothing. Returns the whole day.",
+        "operationId": "ListWeekPlanController_removeEntry",
+        "parameters": [
+          {
+            "name": "listId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "recipe",
+                "manual"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "uuid",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-socket-id",
+            "required": false,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeekPlanDayDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove one entry from a day and keep the others",
+        "tags": [
+          "WeekPlan"
+        ]
+      }
+    },
     "/list/{listId}/categories": {
       "get": {
         "operationId": "ListCategoriesController_getCategories",
@@ -1807,6 +2416,45 @@
         "summary": "Delete a single category",
         "tags": [
           "ListCategories"
+        ]
+      }
+    },
+    "/list/{listId}/supermarkets": {
+      "get": {
+        "operationId": "ListSupermarketsController_getSupermarkets",
+        "parameters": [
+          {
+            "name": "listId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SupermarketDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get all supermarkets for a list",
+        "tags": [
+          "ListSupermarkets"
         ]
       }
     },
@@ -2630,7 +3278,7 @@
             "bearer": []
           }
         ],
-        "summary": "Search shopping list items by name (case-insensitive contains)",
+        "summary": "Search shopping list items by name, best match first (ignores case, hyphens, spaces and umlauts; tolerates a typo or plural)",
         "tags": [
           "Shopping List"
         ]
@@ -3544,7 +4192,7 @@
             "bearer": []
           }
         ],
-        "summary": "Search pantry list items by name (case-insensitive contains)",
+        "summary": "Search pantry list items by name, best match first (ignores case, hyphens, spaces and umlauts; tolerates a typo or plural)",
         "tags": [
           "Pantry List"
         ]
@@ -4027,6 +4675,7 @@
     },
     "/list/{listId}/auto-reduce/accrual": {
       "get": {
+        "description": "`since` is the caller's baseline. Each item resolves its own window from the point it was last accounted for, so members of a shared list are not asked for a window another member already confirmed. A non-empty result marks exactly the returned items as accounted for as of NOW: the app presents the modal precisely when rows come back, so those items count as seen from here on. Items that are NOT returned keep the consumption they have accrued, which is what the list-wide cursor bump used to destroy.",
         "operationId": "AutoReduceController_accrual",
         "parameters": [
           {
@@ -4060,6 +4709,117 @@
           }
         ],
         "summary": "Get suggested deltas since the cursor",
+        "tags": [
+          "smart-suggestions"
+        ]
+      }
+    },
+    "/list/{listId}/auto-reduce/cursor": {
+      "get": {
+        "description": "Start of the next accrual window, shared by every member of the list. Null until the modal has been presented for this list once; the app then falls back to its per-user baseline.",
+        "operationId": "AutoReduceController_getCursor",
+        "parameters": [
+          {
+            "name": "listId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "Premium subscription required"
+          },
+          "default": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoReduceCursorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get the list-wide auto-reduce cursor",
+        "tags": [
+          "smart-suggestions"
+        ]
+      },
+      "patch": {
+        "deprecated": true,
+        "description": "Kept so app versions that call this after the modal keep working. It writes nothing and returns the stored cursor unchanged. Settling is per item now and happens in GET accrual: moving a list-wide cursor reset the window for items the user was never shown and discarded the consumption they had accrued.",
+        "operationId": "AutoReduceController_bumpCursor",
+        "parameters": [
+          {
+            "name": "listId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "Premium subscription required"
+          },
+          "default": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoReduceCursorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Deprecated: no longer moves anything",
+        "tags": [
+          "smart-suggestions"
+        ]
+      }
+    },
+    "/list/{listId}/auto-reduce/preview": {
+      "get": {
+        "operationId": "AutoReduceController_preview",
+        "parameters": [
+          {
+            "name": "listId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "403": {
+            "description": "Premium subscription required"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Items that would be auto-reduced if defaultAutoReduce were on. Read-only; does NOT consult the flag.",
         "tags": [
           "smart-suggestions"
         ]
@@ -4116,35 +4876,6 @@
           }
         ],
         "summary": "Suggest a consumption rate for an item",
-        "tags": [
-          "smart-suggestions"
-        ]
-      }
-    },
-    "/list/{listId}/buy-reminders": {
-      "get": {
-        "operationId": "BuyRemindersController_list",
-        "parameters": [
-          {
-            "name": "listId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Get items typically bought around now but not yet on the list",
         "tags": [
           "smart-suggestions"
         ]
@@ -4232,8 +4963,49 @@
       }
     },
     "/files": {
+      "get": {
+        "description": "Streams the image stored at the given S3 key. Keys follow the `{type}/{listId}/{id}` convention (e.g. `article/{listId}/{articleId}`). Pass `thumbnail=true` to receive a small (~100px wide) PNG preview instead of the full-resolution original; omit it (or send any value other than `true`) to get the original. This endpoint is public and unauthenticated — the unguessable UUID-based key is the capability, so the URL can be embedded directly in `<img>`/lightbox views.",
+        "operationId": "S3Controller_getImage",
+        "parameters": [
+          {
+            "name": "path",
+            "required": true,
+            "in": "query",
+            "description": "S3 key of the image to fetch (e.g. `article/{listId}/{articleId}`).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "thumbnail",
+            "required": false,
+            "in": "query",
+            "description": "When `true`, returns the ~100px-wide PNG thumbnail; otherwise the full-resolution original.",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The image stream.",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Download a stored image",
+        "tags": [
+          "files"
+        ]
+      },
       "delete": {
-        "description": "Deletes the object (and its thumbnail) at the given S3 key. If `ownerType` and `ownerId` are provided, the named row is excluded from the reference-count check so its own surviving `imageUrl` does not block the delete; the file is kept only when another row still references it. When the owner params are omitted, the file is deleted unconditionally.",
+        "description": "Deletes the object (and its thumbnail) at the given S3 key. Barcode images (`barcode/…` keys) are a global shared resource and cannot be deleted — they are only ever replaced (override), so such requests are rejected with 403. For list-scoped keys (`article/`, `catalog/`, `pantry/`, `supermarket/`) the caller must be a member of the list embedded in the key; trusted server callers (shared-secret API key, no user identity) bypass this check. If `ownerType` and `ownerId` are provided, the named row is excluded from the reference-count check so its own surviving `imageUrl` does not block the delete; the file is kept only when another row still references it. When the owner params are omitted, the file is deleted unconditionally.",
         "operationId": "S3Controller_deleteFile",
         "parameters": [
           {
@@ -4659,6 +5431,53 @@
         ]
       }
     },
+    "/ingredients/substitutions/{id}/report": {
+      "post": {
+        "description": "Records one thumbs-down from the calling user for the substitution edge `id` (the `substitutionId` returned with recipe match state / recipe substitutions). Enough distinct reports disable the hint for everyone.",
+        "operationId": "IngredientSubstitutionController_report",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportSubstitutionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportSubstitutionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Report a substitution hint as wrong",
+        "tags": [
+          "Ingredients"
+        ]
+      }
+    },
     "/metrics": {
       "get": {
         "operationId": "GuardedPrometheusController_index",
@@ -4676,7 +5495,7 @@
   },
   "info": {
     "title": "Pantrist",
-    "description": "Public Pantrist API",
+    "description": "API to retrieve of update data related to the Pantrist App",
     "version": "1.0",
     "contact": {}
   },
@@ -4695,6 +5514,29 @@
       }
     },
     "schemas": {
+      "RecipePlanStatsDto": {
+        "type": "object",
+        "properties": {
+          "recipeUuid": {
+            "type": "string",
+            "description": "Recipe UUID the stats belong to"
+          },
+          "timesPlanned": {
+            "type": "number",
+            "description": "How often the recipe was planned in the past"
+          },
+          "lastPlanned": {
+            "type": "string",
+            "description": "Most recent past planned date (YYYY-MM-DD), null if never",
+            "nullable": true
+          }
+        },
+        "required": [
+          "recipeUuid",
+          "timesPlanned",
+          "lastPlanned"
+        ]
+      },
       "OptionalRangeDto": {
         "type": "object",
         "properties": {
@@ -4727,7 +5569,8 @@
               "AlphabeticalAsc",
               "TotalTime",
               "Favorites",
-              "Random"
+              "Random",
+              "Newest"
             ],
             "example": "AlphabeticalAsc"
           },
@@ -4812,12 +5655,37 @@
                 "Rice",
                 "Potatoes",
                 "Pasta",
-                "Sweet"
+                "Sweet",
+                "German",
+                "Italian",
+                "Asian",
+                "Mexican",
+                "Indian",
+                "Mediterranean",
+                "Oriental",
+                "Advanced"
               ]
             }
           },
           "ingredients": {
-            "description": "Filter by ingredient names",
+            "deprecated": true,
+            "description": "Legacy: the pantry as ingredient names. Use `pantryFilter` (plus `listIds`) instead, which reads the pantry server-side with its already-resolved ingredient ids. Every name sent here is resolved per request, and the resolver ends in a language model, so a pantry of a thousand items costs a thousand resolves on every call. Still honoured for app versions in the field and for local-only users, who have no server-side pantry. When set, it wins over `pantryFilter`.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pantryFilter": {
+            "type": "string",
+            "description": "Opt-in to server-side pantry matching. Setting this field tells the server to hydrate the authenticated user's pantry items (across all of their lists) and score recipes against them — the app does not need to ship a 50–200 item array on every request. `all` uses every pantry item the user currently has. `expiring` keeps only items whose earliest best-before date is at most 14 days away (already expired or close to it), so the match prioritises ingredients the user should use up next. Mutually exclusive with `ingredients` — an explicit ingredients array always wins, and this field is ignored when no user is attached.",
+            "enum": [
+              "all",
+              "expiring"
+            ],
+            "example": "all"
+          },
+          "listIds": {
+            "description": "Restrict the `pantryFilter` hydration to a subset of the user's lists. When the app is showing a single household list, send `[currentListId]` so \"fitting recipes\" / \"use-up-soon\" only consider that household's pantry; in all-lists mode send every list id (or omit to fall back to all). Ignored when `pantryFilter` is unset or no user is attached. Ids the caller does not own are silently dropped server-side.",
             "type": "array",
             "items": {
               "type": "string"
@@ -4864,6 +5732,94 @@
           "collectionId": {
             "type": "string",
             "description": "Filter by assigned collection"
+          },
+          "dietaryStyles": {
+            "type": "array",
+            "description": "Only recipes that match EVERY selected dietary style (AND). Dietary styles are a subset of the recipe categories (e.g. Vegan, Vegetarian, Keto, GlutenFree, HighProtein). The user setting \"vegan + high protein\" should surface vegan recipes that are also high-protein — a match-any filter here would leak non-vegan recipes whenever any other style happened to match.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "Breakfast",
+                "Lunch",
+                "Dinner",
+                "Snacks",
+                "Dessert",
+                "Salad",
+                "Shake",
+                "Soup",
+                "Smoothie",
+                "Appetizer",
+                "SideDish",
+                "Stew",
+                "Quick",
+                "ToGo",
+                "FewIngredients",
+                "Baking",
+                "Casserole",
+                "OvenDish",
+                "DoughDish",
+                "Easy",
+                "Basic",
+                "Vegetarian",
+                "Vegan",
+                "LowCarb",
+                "LowFat",
+                "LowCalorie",
+                "HighProtein",
+                "HighFiber",
+                "CleanEating",
+                "Keto",
+                "Pescatarian",
+                "SugarFree",
+                "GlutenFree",
+                "LactoseFree",
+                "Detox",
+                "Vegetables",
+                "Fruits",
+                "Meat",
+                "Fish",
+                "Poultry",
+                "Rice",
+                "Potatoes",
+                "Pasta",
+                "Sweet",
+                "German",
+                "Italian",
+                "Asian",
+                "Mexican",
+                "Indian",
+                "Mediterranean",
+                "Oriental",
+                "Advanced"
+              ]
+            }
+          },
+          "excludeAllergens": {
+            "type": "array",
+            "description": "Exclude recipes that contain ANY of these allergens. Recipes whose allergens are unknown (null) are NOT excluded.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "Gluten",
+                "Crustaceans",
+                "Eggs",
+                "Fish",
+                "Peanuts",
+                "Soybeans",
+                "Milk",
+                "Nuts",
+                "Celery",
+                "Mustard",
+                "Sesame",
+                "SulphurDioxide",
+                "Lupin",
+                "Molluscs"
+              ]
+            }
+          },
+          "mainCoursesOnly": {
+            "type": "boolean",
+            "description": "Leave out recipes whose categories say they are not a meal of their own (dessert, breakfast, snack, drink, side, …), unless they also carry a meal category (lunch, dinner, soup, …). A recipe without categories is kept."
           }
         }
       },
@@ -4913,9 +5869,60 @@
           "Rice",
           "Potatoes",
           "Pasta",
-          "Sweet"
+          "Sweet",
+          "German",
+          "Italian",
+          "Asian",
+          "Mexican",
+          "Indian",
+          "Mediterranean",
+          "Oriental",
+          "Advanced"
         ],
         "description": "Recipe categories"
+      },
+      "Allergen": {
+        "type": "string",
+        "enum": [
+          "Gluten",
+          "Crustaceans",
+          "Eggs",
+          "Fish",
+          "Peanuts",
+          "Soybeans",
+          "Milk",
+          "Nuts",
+          "Celery",
+          "Mustard",
+          "Sesame",
+          "SulphurDioxide",
+          "Lupin",
+          "Molluscs"
+        ],
+        "description": "Allergens contained in the recipe (EU 14). Extracted by the recipe parser and/or derived from ingredients on save; clients should treat this as best-effort guidance, not a legal declaration."
+      },
+      "MetricEquivalentDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "description": "The ingredient's whole amount expressed in the metric unit below",
+            "example": 250
+          },
+          "unit": {
+            "type": "string",
+            "description": "Metric base unit: `g` for solids, `ml` for liquids",
+            "enum": [
+              "g",
+              "ml"
+            ],
+            "example": "g"
+          }
+        },
+        "required": [
+          "amount",
+          "unit"
+        ]
       },
       "IngredientDto": {
         "type": "object",
@@ -4940,6 +5947,7 @@
               "kg",
               "l",
               "ml",
+              "cup",
               "tbsp",
               "tsp",
               "lbs",
@@ -4951,9 +5959,27 @@
             ],
             "example": "g"
           },
+          "metricEquivalent": {
+            "description": "Density-aware metric restatement of this amount, supplied by the importer for `cup` measurements only, since every other unit converts by formula. Describes the whole amount, not one cup. Absent on manually created and on older recipes.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MetricEquivalentDto"
+              }
+            ]
+          },
           "notes": {
             "type": "string",
             "description": "Optional notes about the ingredient"
+          },
+          "normalizedName": {
+            "type": "string",
+            "description": "Server-derived, normalised core noun of the ingredient (language-aware: quantities, units and descriptors stripped, singularised). Used for stable pantry↔recipe matching and de-duplication; clients should treat it as read-only.",
+            "readOnly": true
+          },
+          "ingredientId": {
+            "type": "string",
+            "description": "Server-derived canonical ingredient id: the resolved entry of the shared ingredient catalog. Used for stable, language-independent pantry↔recipe matching. Null when the ingredient could not be resolved (then matching falls back to normalizedName). Read-only for clients.",
+            "readOnly": true
           },
           "partialStepUid": {
             "type": "string",
@@ -4984,6 +6010,13 @@
           "partialStepUid": {
             "type": "string",
             "description": "Optional reference to a partial step"
+          },
+          "timerMinutes": {
+            "type": "number",
+            "description": "Optional explicit timer duration for this step, in minutes. Set by the recipe author (or extracted from the step text) and used to pre-fill the cooking-mode timer instead of relying on text parsing.",
+            "minimum": 1,
+            "maximum": 1440,
+            "example": 5
           }
         },
         "required": [
@@ -5120,6 +6153,130 @@
           }
         }
       },
+      "SubstitutionSuggestionDto": {
+        "type": "object",
+        "properties": {
+          "ingredient": {
+            "type": "string",
+            "description": "The recipe ingredient name that is missing but substitutable",
+            "example": "Butter"
+          },
+          "substituteWith": {
+            "type": "string",
+            "description": "The pantry ingredient the user can use instead (localised display name)",
+            "example": "Margarine"
+          },
+          "note": {
+            "type": "string",
+            "description": "Optional hint for the swap, e.g. \"use 80% of the amount\""
+          },
+          "confidence": {
+            "type": "string",
+            "description": "How well the substitute stands in for the original",
+            "enum": [
+              "perfect",
+              "good",
+              "emergency"
+            ],
+            "example": "good"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Why the pantry item can stand in: `variant` — the pantry holds a more generic kind of the requested ingredient (Tomaten for Kirschtomaten); `substitute` — a curated substitution edge.",
+            "enum": [
+              "variant",
+              "substitute"
+            ]
+          }
+        },
+        "required": [
+          "ingredient",
+          "substituteWith",
+          "confidence"
+        ]
+      },
+      "RecipeOrigin": {
+        "type": "string",
+        "enum": [
+          "user_created",
+          "web_import",
+          "social_import",
+          "offers",
+          "community"
+        ]
+      },
+      "AiRole": {
+        "type": "string",
+        "enum": [
+          "none",
+          "extracted",
+          "generated"
+        ]
+      },
+      "SocialPlatform": {
+        "type": "string",
+        "enum": [
+          "instagram",
+          "tiktok",
+          "youtube",
+          "pinterest",
+          "facebook",
+          "other"
+        ],
+        "description": "Set for social imports, drives the platform icon."
+      },
+      "RecipeSourceDto": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RecipeOrigin"
+              }
+            ]
+          },
+          "aiRole": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AiRole"
+              }
+            ]
+          },
+          "platform": {
+            "description": "Set for social imports, drives the platform icon.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SocialPlatform"
+              }
+            ]
+          },
+          "channelName": {
+            "type": "string",
+            "description": "Channel or author handle, e.g. \"@veganevibes\"."
+          },
+          "originalUrl": {
+            "type": "string",
+            "description": "Link to the original post or page."
+          },
+          "siteName": {
+            "type": "string",
+            "description": "Site name for web imports, e.g. \"chefkoch.de\"."
+          },
+          "aiGeneratedAt": {
+            "type": "string",
+            "description": "When the content was generated (ISO timestamp). Only set for aiRole=generated. Offer prices age, so the app shows this next to them."
+          },
+          "userModified": {
+            "type": "boolean",
+            "description": "True once the user edited a recipe whose content a model produced. The AI badge stays either way, it only changes wording."
+          }
+        },
+        "required": [
+          "origin",
+          "aiRole",
+          "userModified"
+        ]
+      },
       "RecipeDto": {
         "type": "object",
         "properties": {
@@ -5139,7 +6296,7 @@
           },
           "favorites": {
             "type": "number",
-            "description": "Number of times this recipe was favorited"
+            "description": "Number of times this recipe was favorited. Read-only — any value sent on create/update is ignored; it is computed from likes."
           },
           "description": {
             "type": "string",
@@ -5172,13 +6329,20 @@
           },
           "shouldBePublic": {
             "type": "boolean",
-            "description": "Whether the recipe is publicly visible"
+            "description": "Whether the recipe is publicly visible inside the app. Imports are kept out of the sitemap and carry robots: noindex regardless, so this never exposes somebody else's post to a search engine."
           },
           "categories": {
             "type": "array",
             "description": "Recipe categories",
             "items": {
               "$ref": "#/components/schemas/ReceiptCategory"
+            }
+          },
+          "allergens": {
+            "type": "array",
+            "description": "Allergens contained in the recipe (EU 14). Extracted by the recipe parser and/or derived from ingredients on save; clients should treat this as best-effort guidance, not a legal declaration.",
+            "items": {
+              "$ref": "#/components/schemas/Allergen"
             }
           },
           "language": {
@@ -5258,12 +6422,44 @@
           "matchingIngredientCount": {
             "type": "number",
             "description": "Number of ingredients in the recipe that match to the stock. Only set when requesting recipe pagination with current stock"
+          },
+          "missingIngredients": {
+            "description": "Names of the recipe ingredients that are NOT covered by the current stock (pantry staples such as salt, oil or water are excluded and always treated as available). Only set when filtering by ingredients.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "substitutableCount": {
+            "type": "number",
+            "description": "Number of missing ingredients the user could substitute from their pantry. Counted separately from matches — show as a softer \"can substitute\" state, not as \"have it\". Only set when filtering by ingredients and a substitution applies."
+          },
+          "substitutableIngredients": {
+            "description": "Names of the recipe ingredients that are not in stock but covered by a curated substitution from the pantry. These are excluded from missingIngredients. Only set when filtering by ingredients.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "substitutions": {
+            "description": "Concrete \"use X instead of Y\" suggestions for the substitutable ingredients. Only set when filtering by ingredients and a substitution applies.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubstitutionSuggestionDto"
+            }
+          },
+          "source": {
+            "description": "Where this recipe came from and how much of it a model wrote. Present on every recipe response, no separate call needed. Read-only: the server derives the whole block from the recipe itself and ignores whatever the client sends for it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RecipeSourceDto"
+              }
+            ]
           }
         },
         "required": [
           "uuid",
           "name",
-          "favorites",
           "totalTime",
           "preparationTime",
           "defaultServings",
@@ -5275,6 +6471,535 @@
           "authorUuid",
           "ingredients",
           "steps"
+        ]
+      },
+      "RecipeMatchStateRequestDto": {
+        "type": "object",
+        "properties": {
+          "uuids": {
+            "description": "Recipe UUIDs to score against the authenticated user pantry",
+            "minItems": 1,
+            "maxItems": 50,
+            "example": [
+              "7c1bd6e3-…",
+              "b48a01ff-…"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "listIds": {
+            "description": "Scope the pantry the recipes are scored against to a subset of the user's lists. Used together with the `listIds` field on `ApiFilterDto` so the match badges on the home page line up with the same list the filter is using. Ids the caller does not own are silently dropped.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ingredients": {
+            "description": "Pantry item names to score against, for callers with no account. A signed-in caller leaves this unset and the server hydrates their pantry from their own lists, which is authoritative and cheaper. A local-only user has no lists to hydrate from, so the app ships the names it holds on the device instead. Same precedence as on `ApiFilterDto`: an explicit array wins, and the server-side hydration is skipped. Staples are matched from the recipe side (`recipe_ingredient.is_staple`) either way, so they do not need to be listed here.",
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "uuids"
+        ]
+      },
+      "RecipeMatchedIngredientDto": {
+        "type": "object",
+        "properties": {
+          "recipeIngredientName": {
+            "type": "string",
+            "description": "Recipe ingredient display name (from the recipe)."
+          },
+          "pantryItemId": {
+            "type": "string",
+            "description": "UUID of the pantry list item that satisfied the ingredient."
+          },
+          "pantryItemName": {
+            "type": "string",
+            "description": "Name of the pantry list item."
+          },
+          "listId": {
+            "type": "string",
+            "description": "List the pantry item belongs to. Useful for deep-link routing when the app shows multiple households and needs to know which list to open."
+          }
+        },
+        "required": [
+          "recipeIngredientName",
+          "pantryItemId",
+          "pantryItemName",
+          "listId"
+        ]
+      },
+      "RecipeSubstitutableIngredientDto": {
+        "type": "object",
+        "properties": {
+          "recipeIngredientName": {
+            "type": "string",
+            "description": "Recipe ingredient display name (from the recipe)."
+          },
+          "pantryItemId": {
+            "type": "string",
+            "description": "UUID of the pantry list item the user can substitute with."
+          },
+          "pantryItemName": {
+            "type": "string",
+            "description": "Name of the pantry list item (e.g. \"Margarine\")."
+          },
+          "listId": {
+            "type": "string",
+            "description": "List the substitute pantry item belongs to (deep-link routing)."
+          },
+          "confidence": {
+            "type": "string",
+            "description": "How well the substitute covers the target: `perfect` (1:1, indistinguishable), `good` (clear shift but same role), `emergency` (last-resort).",
+            "enum": [
+              "perfect",
+              "good",
+              "emergency"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "description": "Optional localised hint resolved to the caller language with en-US fallback (\"1:1 swap\", \"Vegane Variante, 1:1 ersetzbar\"). Missing when the curated row had no note for any locale."
+          },
+          "kind": {
+            "type": "string",
+            "description": "Why the pantry item can stand in: `variant` — the pantry holds a more generic kind of the requested ingredient (Tomaten for Kirschtomaten); `substitute` — a curated substitution edge. Older API builds omit it (treat as `substitute`).",
+            "enum": [
+              "variant",
+              "substitute"
+            ]
+          }
+        },
+        "required": [
+          "recipeIngredientName",
+          "pantryItemId",
+          "pantryItemName",
+          "listId",
+          "confidence"
+        ]
+      },
+      "RecipeMatchStateDto": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string",
+            "description": "Recipe UUID"
+          },
+          "matchingCount": {
+            "type": "number",
+            "description": "Count of ingredients that are either in the pantry or count as staples (always-available) for the recipe language."
+          },
+          "ingredientCount": {
+            "type": "number",
+            "description": "Total ingredient count of the recipe"
+          },
+          "missingIngredients": {
+            "description": "Names of ingredients not covered by the pantry (excl. staples)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "matchedIngredients": {
+            "description": "Per-ingredient pantry-side detail for the ingredients the recipe matched. Lets the app render \"Butter — durch deine Margarine ersetzt\" with a deep link to the pantry item instead of inferring the mapping by name client-side. Staples are not included (they always count as available but aren't tied to a specific pantry item).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecipeMatchedIngredientDto"
+            }
+          },
+          "stapleIngredients": {
+            "description": "Display names of recipe ingredients flagged as staples for the recipe language (salt, water, oil, …). Staples count toward `matchingCount` because they're assumed always-available, but they don't link to a specific pantry item. The app uses this list to render \"Du hast das wahrscheinlich zuhause\" instead of the regular \"Du hast X im Vorrat\" line.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "substitutableIngredients": {
+            "description": "Recipe ingredients the user can cover via a curated substitution (Stufe 2c) — Margarine for Butter, Honey for Maple syrup, etc. Entries move out of `missingIngredients` so the app can render them in a distinct \"can substitute\" bucket (yellow) rather than as plain misses (red). `matchingCount` stays honest: substitutables do NOT count as direct matches — they're a weaker signal.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecipeSubstitutableIngredientDto"
+            }
+          },
+          "ingredientDensities": {
+            "type": "object",
+            "description": "Grams per millilitre for the recipe ingredients whose catalog entry has been measured, keyed by display name. Lets the app weigh a recipe's spoon against a pantry item kept by the gram: one tablespoon is 15 ml, so 15 ml of paprika powder at 0.45 is about 7 g. Only the ingredients with a known density appear; for the rest the app keeps its old behaviour and treats a stocked pantry item as covering the ingredient without deducting from it.",
+            "additionalProperties": {
+              "type": "number"
+            },
+            "example": {
+              "Paprikapulver": 0.45,
+              "Olivenöl": 0.91
+            }
+          }
+        },
+        "required": [
+          "uuid",
+          "matchingCount",
+          "ingredientCount"
+        ]
+      },
+      "RecipeDeckRequestDto": {
+        "type": "object",
+        "properties": {
+          "currentPage": {
+            "type": "number",
+            "description": "Current page (1-based)",
+            "minimum": 1,
+            "example": 1
+          },
+          "sortBy": {
+            "type": "string",
+            "description": "Sort order",
+            "enum": [
+              "AlphabeticalDesc",
+              "AlphabeticalAsc",
+              "TotalTime",
+              "Favorites",
+              "Random",
+              "Newest"
+            ],
+            "example": "AlphabeticalAsc"
+          },
+          "searchString": {
+            "type": "string",
+            "description": "Search string (name, description, ingredients)",
+            "example": "pancake"
+          },
+          "shouldBePublic": {
+            "type": "boolean",
+            "description": "Only public recipes"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "de-DE",
+              "en-US",
+              "en-GB",
+              "pl-PL",
+              "sv-SE",
+              "nl-NL",
+              "pt-PT",
+              "pt-BR",
+              "it-IT",
+              "es-ES"
+            ],
+            "example": "en-US"
+          },
+          "favoriteReceipts": {
+            "description": "Filter by favorite recipe UUIDs",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "categories": {
+            "type": "array",
+            "description": "Filter by categories",
+            "items": {
+              "type": "string",
+              "enum": [
+                "Breakfast",
+                "Lunch",
+                "Dinner",
+                "Snacks",
+                "Dessert",
+                "Salad",
+                "Shake",
+                "Soup",
+                "Smoothie",
+                "Appetizer",
+                "SideDish",
+                "Stew",
+                "Quick",
+                "ToGo",
+                "FewIngredients",
+                "Baking",
+                "Casserole",
+                "OvenDish",
+                "DoughDish",
+                "Easy",
+                "Basic",
+                "Vegetarian",
+                "Vegan",
+                "LowCarb",
+                "LowFat",
+                "LowCalorie",
+                "HighProtein",
+                "HighFiber",
+                "CleanEating",
+                "Keto",
+                "Pescatarian",
+                "SugarFree",
+                "GlutenFree",
+                "LactoseFree",
+                "Detox",
+                "Vegetables",
+                "Fruits",
+                "Meat",
+                "Fish",
+                "Poultry",
+                "Rice",
+                "Potatoes",
+                "Pasta",
+                "Sweet",
+                "German",
+                "Italian",
+                "Asian",
+                "Mexican",
+                "Indian",
+                "Mediterranean",
+                "Oriental",
+                "Advanced"
+              ]
+            }
+          },
+          "ingredients": {
+            "deprecated": true,
+            "description": "Legacy: the pantry as ingredient names. Use `pantryFilter` (plus `listIds`) instead, which reads the pantry server-side with its already-resolved ingredient ids. Every name sent here is resolved per request, and the resolver ends in a language model, so a pantry of a thousand items costs a thousand resolves on every call. Still honoured for app versions in the field and for local-only users, who have no server-side pantry. When set, it wins over `pantryFilter`.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pantryFilter": {
+            "type": "string",
+            "description": "Opt-in to server-side pantry matching. Setting this field tells the server to hydrate the authenticated user's pantry items (across all of their lists) and score recipes against them — the app does not need to ship a 50–200 item array on every request. `all` uses every pantry item the user currently has. `expiring` keeps only items whose earliest best-before date is at most 14 days away (already expired or close to it), so the match prioritises ingredients the user should use up next. Mutually exclusive with `ingredients` — an explicit ingredients array always wins, and this field is ignored when no user is attached.",
+            "enum": [
+              "all",
+              "expiring"
+            ],
+            "example": "all"
+          },
+          "listIds": {
+            "description": "Restrict the `pantryFilter` hydration to a subset of the user's lists. When the app is showing a single household list, send `[currentListId]` so \"fitting recipes\" / \"use-up-soon\" only consider that household's pantry; in all-lists mode send every list id (or omit to fall back to all). Ignored when `pantryFilter` is unset or no user is attached. Ids the caller does not own are silently dropped server-side.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "authorUuid": {
+            "description": "Filter by author UUID(s)",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
+          "favoritesRange": {
+            "description": "Favorites count range",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OptionalRangeDto"
+              }
+            ]
+          },
+          "totalTimeRange": {
+            "description": "Total time range in minutes",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OptionalRangeDto"
+              }
+            ]
+          },
+          "preparationTimeRange": {
+            "description": "Preparation time range in minutes",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OptionalRangeDto"
+              }
+            ]
+          },
+          "collectionId": {
+            "type": "string",
+            "description": "Filter by assigned collection"
+          },
+          "dietaryStyles": {
+            "type": "array",
+            "description": "Only recipes that match EVERY selected dietary style (AND). Dietary styles are a subset of the recipe categories (e.g. Vegan, Vegetarian, Keto, GlutenFree, HighProtein). The user setting \"vegan + high protein\" should surface vegan recipes that are also high-protein — a match-any filter here would leak non-vegan recipes whenever any other style happened to match.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "Breakfast",
+                "Lunch",
+                "Dinner",
+                "Snacks",
+                "Dessert",
+                "Salad",
+                "Shake",
+                "Soup",
+                "Smoothie",
+                "Appetizer",
+                "SideDish",
+                "Stew",
+                "Quick",
+                "ToGo",
+                "FewIngredients",
+                "Baking",
+                "Casserole",
+                "OvenDish",
+                "DoughDish",
+                "Easy",
+                "Basic",
+                "Vegetarian",
+                "Vegan",
+                "LowCarb",
+                "LowFat",
+                "LowCalorie",
+                "HighProtein",
+                "HighFiber",
+                "CleanEating",
+                "Keto",
+                "Pescatarian",
+                "SugarFree",
+                "GlutenFree",
+                "LactoseFree",
+                "Detox",
+                "Vegetables",
+                "Fruits",
+                "Meat",
+                "Fish",
+                "Poultry",
+                "Rice",
+                "Potatoes",
+                "Pasta",
+                "Sweet",
+                "German",
+                "Italian",
+                "Asian",
+                "Mexican",
+                "Indian",
+                "Mediterranean",
+                "Oriental",
+                "Advanced"
+              ]
+            }
+          },
+          "excludeAllergens": {
+            "type": "array",
+            "description": "Exclude recipes that contain ANY of these allergens. Recipes whose allergens are unknown (null) are NOT excluded.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "Gluten",
+                "Crustaceans",
+                "Eggs",
+                "Fish",
+                "Peanuts",
+                "Soybeans",
+                "Milk",
+                "Nuts",
+                "Celery",
+                "Mustard",
+                "Sesame",
+                "SulphurDioxide",
+                "Lupin",
+                "Molluscs"
+              ]
+            }
+          },
+          "mainCoursesOnly": {
+            "type": "boolean",
+            "description": "Leave out recipes whose categories say they are not a meal of their own (dessert, breakfast, snack, drink, side, …), unless they also carry a meal category (lunch, dinner, soup, …). A recipe without categories is kept."
+          },
+          "deckSize": {
+            "type": "number",
+            "description": "Number of cards to return in the deck (1–50, default 15).",
+            "minimum": 1,
+            "maximum": 50,
+            "example": 15
+          }
+        }
+      },
+      "SwipeWeekPlanTargetDto": {
+        "type": "object",
+        "properties": {
+          "listId": {
+            "type": "string",
+            "description": "List (household) to plan into"
+          },
+          "date": {
+            "type": "string",
+            "description": "Day to plan on (YYYY-MM-DD)",
+            "example": "2026-06-10"
+          }
+        },
+        "required": [
+          "listId",
+          "date"
+        ]
+      },
+      "SwipeDecisionDto": {
+        "type": "object",
+        "properties": {
+          "recipeUuid": {
+            "type": "string",
+            "description": "UUID of the swiped recipe"
+          },
+          "decision": {
+            "type": "string",
+            "description": "'like' (swipe right) or 'skip' (swipe left)",
+            "enum": [
+              "like",
+              "skip"
+            ]
+          },
+          "weekPlan": {
+            "description": "When liking, optionally plan the recipe straight into a week-plan day. Ignored for skips.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SwipeWeekPlanTargetDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "recipeUuid",
+          "decision"
+        ]
+      },
+      "MessageDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "sendNoResponse": {
+            "type": "boolean"
+          },
+          "cloudflareToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "subject",
+          "message",
+          "language",
+          "sendNoResponse",
+          "cloudflareToken"
         ]
       },
       "HistoryItemType": {
@@ -5301,6 +7026,10 @@
           },
           "displayName": {
             "type": "string"
+          },
+          "profileImage": {
+            "type": "string",
+            "description": "Public profile picture key/URL. Safe to expose so members of a shared list can render each other’s avatars."
           },
           "forcedPremiumTariff": {
             "type": "string",
@@ -5412,6 +7141,70 @@
         },
         "required": [
           "articleList"
+        ]
+      },
+      "HouseholdDetailsDto": {
+        "type": "object",
+        "properties": {
+          "manufacturer": {
+            "type": "string",
+            "nullable": true
+          },
+          "modelNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "serialNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "warrantyExpiration": {
+            "type": "string",
+            "nullable": true,
+            "format": "date",
+            "description": "Last day of the warranty, YYYY-MM-DD."
+          },
+          "manualUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "Link to the manual or product page."
+          },
+          "purchaseSource": {
+            "type": "string",
+            "nullable": true,
+            "description": "Where the item was bought (shop, website)."
+          }
+        }
+      },
+      "WeighingUnit": {
+        "type": "string",
+        "enum": [
+          "g",
+          "kg",
+          "oz",
+          "lbs"
+        ],
+        "description": "The unit the scale shows, used for `tare` and for input."
+      },
+      "WeighingDto": {
+        "type": "object",
+        "properties": {
+          "tare": {
+            "type": "number",
+            "nullable": true,
+            "description": "Weight of the empty container, in `unit`."
+          },
+          "unit": {
+            "description": "The unit the scale shows, used for `tare` and for input.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WeighingUnit"
+              }
+            ]
+          }
+        },
+        "required": [
+          "unit"
         ]
       },
       "ValueWithMetricDto": {
@@ -5533,6 +7326,10 @@
                 "$ref": "#/components/schemas/AutoReduceWeekdayDto"
               }
             ]
+          },
+          "activatedAt": {
+            "type": "string",
+            "description": "ISO timestamp the user activated auto-reduce on this item. Stamped by the app on the false→true toggle and preserved across schedule edits. Accrual is clamped to `max(userCursor, activatedAt)` so a freshly-enabled item does not retroactively count consumption from before activation."
           }
         },
         "required": [
@@ -5556,7 +7353,6 @@
             "type": "string"
           },
           "barcode": {
-            "type": "object",
             "nullable": true,
             "oneOf": [
               {
@@ -5581,7 +7377,6 @@
             "type": "string"
           },
           "supermarketId": {
-            "type": "object",
             "nullable": true,
             "oneOf": [
               {
@@ -5610,6 +7405,17 @@
           "disableMinAmount": {
             "type": "boolean",
             "nullable": true
+          },
+          "mergeDifferentContent": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether two entries of this article that differ only in contentVolume count as the same thing. null means the user has not been asked yet."
+          },
+          "placeholderForCategoryUuid": {
+            "type": "string",
+            "nullable": true,
+            "readOnly": true,
+            "description": "Set by the server on the auto-managed placeholder row it keeps on the shopping list for a category with a configured minimum stock; holds that category's uuid. Null on every item a user created. Clients may render such a row as a category placeholder (e.g. with the translated category label) rather than a concrete article. Strictly read-only: the server keeps whatever is already stored and ignores the value a write supplies, so omitting it never clears the marker."
           },
           "price": {
             "type": "number",
@@ -5695,12 +7501,46 @@
               "type": "string"
             }
           },
+          "allergens": {
+            "type": "array",
+            "nullable": true,
+            "description": "Allergens (EU 14) this item contains. Auto-detected from the name on add and overridable by the client. Best-effort guidance, not a legal declaration.",
+            "items": {
+              "$ref": "#/components/schemas/Allergen"
+            }
+          },
+          "ingredientId": {
+            "type": "string",
+            "nullable": true,
+            "readOnly": true,
+            "description": "Server-derived canonical ingredient id, resolved from the name on add. Shares identity with recipe ingredients for matching and de-duplication. Read-only; null when unresolved."
+          },
           "nutriments": {
             "nullable": true,
             "type": "object",
             "allOf": [
               {
                 "$ref": "#/components/schemas/ArticleNutrimentsDto"
+              }
+            ]
+          },
+          "householdDetails": {
+            "nullable": true,
+            "description": "Manufacturer, model, serial number, warranty and the like, for items in a category with itemType 'non-food'.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HouseholdDetailsDto"
+              }
+            ]
+          },
+          "weighing": {
+            "nullable": true,
+            "description": "Set when the item is managed by weight: its stock is the fill level of one open package, read off a scale. Null for counted items.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WeighingDto"
               }
             ]
           },
@@ -5856,6 +7696,14 @@
           "entries"
         ]
       },
+      "CategoryItemType": {
+        "type": "string",
+        "enum": [
+          "food",
+          "non-food"
+        ],
+        "description": "'non-food' when the category is non-food in any of the lists merged into this entry; absent means food."
+      },
       "MergedCategoryDto": {
         "type": "object",
         "properties": {
@@ -5891,6 +7739,14 @@
           "defaultBestBeforeDays": {
             "type": "number",
             "nullable": true
+          },
+          "itemType": {
+            "description": "'non-food' when the category is non-food in any of the lists merged into this entry; absent means food.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CategoryItemType"
+              }
+            ]
           }
         },
         "required": [
@@ -6033,6 +7889,95 @@
           }
         }
       },
+      "DietaryPreferencesDto": {
+        "type": "object",
+        "properties": {
+          "dietaryStyles": {
+            "type": "array",
+            "description": "Preferred dietary styles for this household (subset of recipe categories, e.g. Vegan, Vegetarian, Keto). Used as default OR filter.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "Breakfast",
+                "Lunch",
+                "Dinner",
+                "Snacks",
+                "Dessert",
+                "Salad",
+                "Shake",
+                "Soup",
+                "Smoothie",
+                "Appetizer",
+                "SideDish",
+                "Stew",
+                "Quick",
+                "ToGo",
+                "FewIngredients",
+                "Baking",
+                "Casserole",
+                "OvenDish",
+                "DoughDish",
+                "Easy",
+                "Basic",
+                "Vegetarian",
+                "Vegan",
+                "LowCarb",
+                "LowFat",
+                "LowCalorie",
+                "HighProtein",
+                "HighFiber",
+                "CleanEating",
+                "Keto",
+                "Pescatarian",
+                "SugarFree",
+                "GlutenFree",
+                "LactoseFree",
+                "Detox",
+                "Vegetables",
+                "Fruits",
+                "Meat",
+                "Fish",
+                "Poultry",
+                "Rice",
+                "Potatoes",
+                "Pasta",
+                "Sweet",
+                "German",
+                "Italian",
+                "Asian",
+                "Mexican",
+                "Indian",
+                "Mediterranean",
+                "Oriental",
+                "Advanced"
+              ]
+            }
+          },
+          "allergens": {
+            "type": "array",
+            "description": "Allergens this household wants to avoid. Used to warn on items and to exclude recipes containing these allergens.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "Gluten",
+                "Crustaceans",
+                "Eggs",
+                "Fish",
+                "Peanuts",
+                "Soybeans",
+                "Milk",
+                "Nuts",
+                "Celery",
+                "Mustard",
+                "Sesame",
+                "SulphurDioxide",
+                "Lupin",
+                "Molluscs"
+              ]
+            }
+          }
+        }
+      },
       "BlockSettingsDto": {
         "type": "object",
         "properties": {
@@ -6050,6 +7995,13 @@
           },
           "smartSuggestions": {
             "$ref": "#/components/schemas/SmartSuggestionsSettingsDto"
+          },
+          "dietaryPreferences": {
+            "$ref": "#/components/schemas/DietaryPreferencesDto"
+          },
+          "allowToOpenArticles": {
+            "type": "boolean",
+            "description": "When true, auto-restock discounts partially consumed open packages from the available amount (mirrors the app pantry setting). Defaults to true when unset."
           }
         },
         "required": [
@@ -6242,6 +8194,10 @@
             "description": "How many minutes the invite stays valid for. Defaults to 60.",
             "minimum": 1,
             "maximum": 43200
+          },
+          "recipientUid": {
+            "type": "string",
+            "description": "Pantrist user to send the invite to as a push notification, for inviting someone by e-mail address. Without it the invite is only a share link."
           }
         },
         "required": [
@@ -6357,6 +8313,14 @@
               "type": "string"
             }
           },
+          "allergens": {
+            "type": "array",
+            "nullable": true,
+            "description": "Allergens (EU 14) this catalog item carries. Propagated onto created articles as best-effort defaults.",
+            "items": {
+              "$ref": "#/components/schemas/Allergen"
+            }
+          },
           "favourite": {
             "type": "boolean",
             "nullable": true
@@ -6392,6 +8356,11 @@
           "manageMinimumAmount": {
             "type": "boolean",
             "nullable": true
+          },
+          "mergeDifferentContent": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether two entries of this product that differ only in contentVolume count as the same thing. null means the user has not been asked yet."
           },
           "minimumAmount": {
             "type": "number",
@@ -6443,6 +8412,269 @@
           "contentVolume"
         ]
       },
+      "ArticleCatalogOverlayRowDto": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "brand": {
+            "type": "string",
+            "nullable": true
+          },
+          "categoryUuid": {
+            "type": "string"
+          },
+          "contentVolume": {
+            "type": "number"
+          },
+          "unitId": {
+            "type": "string",
+            "nullable": true
+          },
+          "barcode": {
+            "nullable": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "supermarketId": {
+            "nullable": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tags": {
+            "nullable": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allergens": {
+            "type": "array",
+            "nullable": true,
+            "description": "Allergens (EU 14) this catalog item carries. Propagated onto created articles as best-effort defaults.",
+            "items": {
+              "$ref": "#/components/schemas/Allergen"
+            }
+          },
+          "favourite": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "deposit": {
+            "type": "number",
+            "nullable": true
+          },
+          "imageUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "additionalImageUrls": {
+            "nullable": true,
+            "description": "Additional product photo URLs, ordered. imageUrl is the primary photo.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "predefinedPantry": {
+            "type": "string",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "defaultBestBeforeDays": {
+            "type": "number",
+            "nullable": true
+          },
+          "manageMinimumAmount": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "mergeDifferentContent": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether two entries of this product that differ only in contentVolume count as the same thing. null means the user has not been asked yet."
+          },
+          "minimumAmount": {
+            "type": "number",
+            "nullable": true
+          },
+          "amountToBuy": {
+            "type": "number",
+            "nullable": true
+          },
+          "price": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PriceWithDateDto"
+              }
+            ]
+          },
+          "pricePerMarket": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PriceWithDateDto"
+            }
+          },
+          "nutriments": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ArticleNutrimentsDto"
+              }
+            ]
+          },
+          "complexBestBeforeData": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ArticleCatalogBestBeforeDatesDto"
+              }
+            ]
+          },
+          "deleted": {
+            "type": "boolean",
+            "description": "Tombstone: the seed item with this `seed:` uuid is removed from the list. Only `seed:` uuids may carry it."
+          }
+        },
+        "required": [
+          "uuid",
+          "name",
+          "categoryUuid",
+          "contentVolume"
+        ]
+      },
+      "ArticleCatalogOverlayDto": {
+        "type": "object",
+        "properties": {
+          "seedLang": {
+            "type": "string",
+            "nullable": true,
+            "description": "Language of the default catalog the rows overlay (e.g. `de-DE`); null for a legacy list, whose rows are the whole catalog."
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArticleCatalogOverlayRowDto"
+            }
+          }
+        },
+        "required": [
+          "seedLang",
+          "rows"
+        ]
+      },
+      "AisleOrderMarketsDto": {
+        "type": "object",
+        "properties": {
+          "marketIds": {
+            "description": "Markets whose aisle order is learned with 'high' confidence. Open to every account, so the app can point free users at the feature; the order itself stays premium.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "marketIds"
+        ]
+      },
+      "AisleRankDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Category uuid, or a product key: `ing:<ingredientId>` when the purchase carried an ingredient, else the purchase product key (`bc:<first barcode>` or `nb:<lowercased trimmed name>|<lowercased trimmed brand>`)."
+          },
+          "rank": {
+            "type": "number",
+            "description": "Median relative position of the first check-off within a trip, 0 = first, 1 = last. Categories and products share the scale."
+          },
+          "name": {
+            "type": "string",
+            "description": "Products only: the name it was last bought under in that market, for showing which articles the order covers."
+          },
+          "category": {
+            "type": "string",
+            "description": "Products only: the category uuid it was last bought in there."
+          }
+        },
+        "required": [
+          "key",
+          "rank"
+        ]
+      },
+      "AisleOrderDto": {
+        "type": "object",
+        "properties": {
+          "marketId": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "low"
+            ],
+            "description": "'high' from 3 trips and 5 distinct categories on; clients should keep their manual order while it is 'low'."
+          },
+          "trips": {
+            "type": "number",
+            "description": "Trips the order was learned from."
+          },
+          "categories": {
+            "description": "Categories, earliest in the market first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AisleRankDto"
+            }
+          },
+          "products": {
+            "description": "Products, earliest in the market first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AisleRankDto"
+            }
+          }
+        },
+        "required": [
+          "marketId",
+          "confidence",
+          "trips",
+          "categories",
+          "products"
+        ]
+      },
+      "AisleOrdersDto": {
+        "type": "object",
+        "properties": {
+          "markets": {
+            "description": "One entry per market with timed purchases.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AisleOrderDto"
+            }
+          }
+        },
+        "required": [
+          "markets"
+        ]
+      },
       "PurchasedItemDto": {
         "type": "object",
         "properties": {
@@ -6491,6 +8723,16 @@
             "type": "string",
             "description": "ISO date string"
           },
+          "purchasedAt": {
+            "type": "string",
+            "description": "ISO timestamp of the check-off. Orders the purchases within one shopping trip; the server sets it when a new purchase arrives without one.",
+            "format": "date-time"
+          },
+          "ingredientId": {
+            "type": "string",
+            "description": "Canonical ingredient id of the checked-off list item (ArticleDto.ingredientId). Identifies the product for the learned aisle order.",
+            "nullable": true
+          },
           "price": {
             "type": "number"
           },
@@ -6534,6 +8776,53 @@
           "purchaseDate",
           "priceType",
           "discountType"
+        ]
+      },
+      "PurchasePageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchasedItemDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "description": "Pass as `before` to get the next, older page. Absent on the last page."
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "PriceTrendPointDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "Purchase date (ISO string)."
+          },
+          "unitPrice": {
+            "type": "number",
+            "description": "Price of one unit (package) of the purchase."
+          },
+          "pricePerContent": {
+            "type": "number",
+            "description": "Unit price divided by the content volume, when known."
+          },
+          "contentVolume": {
+            "type": "number"
+          },
+          "unitId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "unitPrice",
+          "contentVolume",
+          "unitId"
         ]
       },
       "PriceTrendItemDto": {
@@ -6583,6 +8872,21 @@
           "hasContentChange": {
             "type": "boolean",
             "description": "True if at least one content-volume change has been detected for this product."
+          },
+          "recentPrices": {
+            "description": "The last purchases with a price (at most 8), oldest first: enough for a sparkline.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceTrendPointDto"
+            }
+          },
+          "firstPrice": {
+            "description": "The first purchase with a price, to measure the change since. Absent without one.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PriceTrendPointDto"
+              }
+            ]
           }
         },
         "required": [
@@ -6593,7 +8897,8 @@
           "lastUnitId",
           "lastContentVolume",
           "marketUids",
-          "hasContentChange"
+          "hasContentChange",
+          "recentPrices"
         ]
       },
       "PriceTrendsPageDto": {
@@ -6743,17 +9048,75 @@
           "color": {
             "type": "string"
           },
+          "itemType": {
+            "description": "Absent means 'food'. 'non-food' items get household details (manufacturer, serial number, warranty) instead of nutrition facts.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CategoryItemType"
+              }
+            ]
+          },
           "defaultBestBeforeDays": {
             "type": "number",
             "nullable": true
           },
           "complexBestBeforeData": {
             "$ref": "#/components/schemas/ArticleCatalogBestBeforeDatesDto"
+          },
+          "manageMinimumStock": {
+            "type": "boolean",
+            "description": "When true, this category takes part in the minimum-stock rule: the server keeps a placeholder item on the shopping list for as long as the pantry holds less of this category than `minimumStock`. Omitted or false means the category is not managed."
+          },
+          "minimumStock": {
+            "type": "number",
+            "nullable": true,
+            "description": "How much of this category the household wants to keep in the pantry, measured as the summed `amount` of its pantry items. Only applied while `manageMinimumStock` is true."
           }
         },
         "required": [
           "uuid",
           "name"
+        ]
+      },
+      "LinkedStoreDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "retailerKey": {
+            "type": "string"
+          },
+          "street": {
+            "type": "string",
+            "nullable": true
+          },
+          "zip": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string",
+            "nullable": true
+          },
+          "lat": {
+            "type": "number",
+            "nullable": true,
+            "description": "Latitude of the branch (decimal degrees). Lets the app recognise the market by location without a captured geofence."
+          },
+          "lng": {
+            "type": "number",
+            "nullable": true,
+            "description": "Longitude of the branch (decimal degrees)."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "retailerKey"
         ]
       },
       "SupermarketDto": {
@@ -6778,6 +9141,51 @@
           "differentOrder": {
             "type": "boolean",
             "nullable": true
+          },
+          "retailerKey": {
+            "type": "string",
+            "nullable": true,
+            "description": "Chain identifier (e.g. \"rewe\") when a default-supermarket icon was picked, null for a custom market."
+          },
+          "storeId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The real branch (offers module store id) this market is, if the user linked one. Unlike retailerKey, identifies a specific location, not just the chain."
+          },
+          "linkedStore": {
+            "nullable": true,
+            "description": "Read-only display info for storeId, joined in so callers never need a second lookup. Absent when storeId is unset, or when the linked store could not be found (e.g. a stale id).",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LinkedStoreDto"
+              }
+            ]
+          },
+          "geofenceLat": {
+            "type": "number",
+            "nullable": true,
+            "description": "Geofence centre latitude (decimal degrees)"
+          },
+          "geofenceLng": {
+            "type": "number",
+            "nullable": true,
+            "description": "Geofence centre longitude (decimal degrees)"
+          },
+          "geofenceRadiusM": {
+            "type": "number",
+            "nullable": true,
+            "description": "Geofence radius in metres"
+          },
+          "geofenceCapturedAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "When the geofence was captured (ISO 8601)"
+          },
+          "geofenceAddress": {
+            "type": "string",
+            "nullable": true,
+            "description": "Address of the geofence centre, shown to the user in place of coordinates. Display only: arrival is decided by the coordinates."
           }
         },
         "required": [
@@ -7019,6 +9427,13 @@
         "properties": {
           "name": {
             "type": "string"
+          },
+          "supermarketIds": {
+            "description": "Markets to buy the item at: `uid`s from GET /list/{listId}/supermarkets. Unknown ids are rejected with 400.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -7065,6 +9480,7 @@
           "kg",
           "l",
           "ml",
+          "cup",
           "tbsp",
           "tsp",
           "lbs",
@@ -7168,6 +9584,14 @@
               "type": "string"
             }
           },
+          "allergens": {
+            "type": "array",
+            "nullable": true,
+            "description": "Allergens (EU 14) detected in the product. Best-effort guidance, not a legal declaration.",
+            "items": {
+              "$ref": "#/components/schemas/Allergen"
+            }
+          },
           "nutriments": {
             "$ref": "#/components/schemas/ArticleNutrimentsDto"
           },
@@ -7182,7 +9606,7 @@
           },
           "indexable": {
             "type": "boolean",
-            "description": "False when the page should render <meta name=\"robots\" content=\"noindex\">. Computed from name length, brand, category, image, and offer presence."
+            "description": "False when the page should render <meta name=\"robots\" content=\"noindex\">. Computed from GTIN validity, name length, image presence, and at least two of: brand, category, nutriments, tags or allergens (offers do not count)."
           }
         },
         "required": [
@@ -7325,7 +9749,7 @@
           },
           "indexable": {
             "type": "boolean",
-            "description": "False when the page should render <meta name=\"robots\" content=\"noindex\">."
+            "description": "False when the page should render <meta name=\"robots\" content=\"noindex\">. Computed from GTIN validity, name length, image presence, and at least two of: brand, category, nutriments, tags or allergens (offers do not count)."
           }
         },
         "required": [
@@ -7385,6 +9809,14 @@
             "type": "array",
             "items": {
               "type": "string"
+            }
+          },
+          "allergens": {
+            "type": "array",
+            "nullable": true,
+            "description": "Allergens (EU 14) detected in the product. Best-effort guidance, not a legal declaration.",
+            "items": {
+              "$ref": "#/components/schemas/Allergen"
             }
           },
           "nutriments": {
@@ -7560,7 +9992,9 @@
               "auto_reduce",
               "restock",
               "set_amount",
-              "barcode"
+              "barcode",
+              "nfc",
+              "shortcut"
             ]
           }
         },
@@ -7606,6 +10040,123 @@
           "barcode"
         ]
       },
+      "AutoReduceCursorDto": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO timestamp the next accrual window starts from, shared by every member of the list. Null when the modal has never been presented for this list; the app then falls back to its per-user baseline."
+          }
+        },
+        "required": [
+          "cursor"
+        ]
+      },
+      "BuyReminderLastPurchaseDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "brand": {
+            "type": "string",
+            "nullable": true
+          },
+          "barcode": {
+            "nullable": true,
+            "description": "Multi-barcode array (same shape as list_item.barcode).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "categoryUuid": {
+            "type": "string",
+            "nullable": true
+          },
+          "unitId": {
+            "type": "string",
+            "nullable": true
+          },
+          "contentVolume": {
+            "type": "number"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "supermarketId": {
+            "nullable": true,
+            "description": "Supermarket IDs the item was bought at (array column).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "price": {
+            "type": "number",
+            "nullable": true
+          },
+          "priceType": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "name",
+          "contentVolume",
+          "amount"
+        ]
+      },
+      "BuyReminderRowDto": {
+        "type": "object",
+        "properties": {
+          "identityKey": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "brand": {
+            "type": "string",
+            "nullable": true
+          },
+          "barcode": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastPurchaseAt": {
+            "type": "string"
+          },
+          "typicalIntervalDays": {
+            "type": "number"
+          },
+          "daysSinceLastPurchase": {
+            "type": "number"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "low"
+            ]
+          },
+          "lastPurchase": {
+            "$ref": "#/components/schemas/BuyReminderLastPurchaseDto"
+          }
+        },
+        "required": [
+          "identityKey",
+          "displayName",
+          "brand",
+          "barcode",
+          "lastPurchaseAt",
+          "typicalIntervalDays",
+          "daysSinceLastPurchase",
+          "confidence",
+          "lastPurchase"
+        ]
+      },
       "StorageLocationDto": {
         "type": "object",
         "properties": {
@@ -7641,6 +10192,33 @@
           "isFavourite",
           "locationType",
           "icon"
+        ]
+      },
+      "AiQuotaDto": {
+        "type": "object",
+        "properties": {
+          "unlimited": {
+            "type": "boolean",
+            "description": "Premium: AI features without a monthly limit."
+          },
+          "limit": {
+            "type": "number",
+            "description": "AI features a free account gets per month."
+          },
+          "used": {
+            "type": "number",
+            "description": "AI features used this month."
+          },
+          "remaining": {
+            "type": "number",
+            "description": "AI features left this month; 0 when unlimited."
+          }
+        },
+        "required": [
+          "unlimited",
+          "limit",
+          "used",
+          "remaining"
         ]
       },
       "CreateUserDto": {
@@ -7683,7 +10261,8 @@
             ]
           },
           "productId": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "expiresAt": {
             "type": "string"
@@ -7695,11 +10274,14 @@
               "PLAY_STORE",
               "STRIPE"
             ]
+          },
+          "grantedManually": {
+            "type": "boolean",
+            "description": "Granted on the admin page rather than bought. Store events do not end it."
           }
         },
         "required": [
           "status",
-          "productId",
           "expiresAt"
         ]
       },
@@ -7759,14 +10341,33 @@
           "notificationTime": {
             "type": "string"
           },
+          "reminderDays": {
+            "description": "Days before the best before date on which to send an expiry reminder (0 = on the day itself). When a request leaves it out, it is derived from the legacy `atExpiryDate` / `sevenDays` / `thirtyDays` toggles; responses always contain it.",
+            "example": [
+              0,
+              14,
+              30
+            ],
+            "maxItems": 5,
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
           "thirtyDays": {
-            "type": "boolean"
+            "type": "boolean",
+            "deprecated": true,
+            "description": "Use reminderDays"
           },
           "sevenDays": {
-            "type": "boolean"
+            "type": "boolean",
+            "deprecated": true,
+            "description": "Use reminderDays. Despite its name it stands for a reminder 14 days before expiry."
           },
           "atExpiryDate": {
-            "type": "boolean"
+            "type": "boolean",
+            "deprecated": true,
+            "description": "Use reminderDays"
           }
         }
       },
@@ -7778,6 +10379,10 @@
           },
           "displayName": {
             "type": "string"
+          },
+          "profileImage": {
+            "type": "string",
+            "description": "Public profile picture key/URL. Safe to expose so members of a shared list can render each other’s avatars."
           },
           "forcedPremiumTariff": {
             "type": "string",
@@ -7793,11 +10398,12 @@
           "language": {
             "type": "string"
           },
+          "emailVerified": {
+            "type": "boolean",
+            "description": "Whether the email address has been confirmed (verification link, or inherited from the Firebase account on import)."
+          },
           "isTestUser": {
             "type": "boolean"
-          },
-          "profileImage": {
-            "type": "string"
           },
           "providerId": {
             "type": "string"
@@ -7836,6 +10442,21 @@
           },
           "notificationSettings": {
             "$ref": "#/components/schemas/NotificationSettingsDto"
+          },
+          "lastSeen": {
+            "type": "string",
+            "description": "ISO timestamp of the last `/me/last-seen` ping. Used by analytics to track user activity (NOT the auto-reduce cursor — see `autoReduceCursor`)."
+          },
+          "autoReduceCursor": {
+            "type": "string",
+            "description": "ISO timestamp the app uses as the `since` parameter for the cold-start auto-reduce modal. Bumped via PATCH /me/auto-reduce-cursor after each modal presentation so accrual accumulates across sessions and stays in sync across devices."
+          },
+          "seenTips": {
+            "description": "The one-time tips (coach marks) this person has seen, on any device. Added via PUT /me/seen-tips/:tip.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -7876,6 +10497,424 @@
           }
         }
       },
+      "AuthRolloutDto": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "allowlist",
+              "percent",
+              "all"
+            ]
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the caller (identified by the bearer token, Firebase or Pantrist) may sign in through /auth. Without a token this reflects the global mode only."
+          },
+          "newAccounts": {
+            "type": "boolean",
+            "description": "Whether brand-new accounts may be created through /auth."
+          },
+          "migrated": {
+            "type": "boolean",
+            "description": "True when the caller already has a Pantrist credential (password or linked provider) or an active session, i.e. was migrated before. Only set when a token was sent."
+          }
+        },
+        "required": [
+          "mode",
+          "enabled",
+          "newAccounts"
+        ]
+      },
+      "RegisterDto": {
+        "type": "object",
+        "properties": {
+          "client": {
+            "type": "string",
+            "description": "Client label: ios, android, web, wear, …",
+            "maxLength": 64
+          },
+          "deviceName": {
+            "type": "string",
+            "description": "Human readable device name for the session list.",
+            "maxLength": 128
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 72
+          },
+          "displayName": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "language": {
+            "type": "string",
+            "description": "BCP 47 language tag the app runs in."
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "displayName"
+        ]
+      },
+      "AuthSessionResponseDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT to send as `Authorization: Bearer …`."
+          },
+          "expiresIn": {
+            "type": "number",
+            "description": "Seconds until the access token expires."
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "Opaque token for POST /auth/token/refresh. Rotates on every refresh; store the newest one and never refresh concurrently."
+          },
+          "tokenType": {
+            "type": "string",
+            "example": "Bearer"
+          },
+          "sessionId": {
+            "type": "string",
+            "description": "Id of the session the tokens belong to."
+          },
+          "isNewUser": {
+            "type": "boolean",
+            "description": "True when this call created the account."
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserDto"
+          }
+        },
+        "required": [
+          "accessToken",
+          "expiresIn",
+          "refreshToken",
+          "tokenType",
+          "sessionId",
+          "isNewUser"
+        ]
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "client": {
+            "type": "string",
+            "description": "Client label: ios, android, web, wear, …",
+            "maxLength": 64
+          },
+          "deviceName": {
+            "type": "string",
+            "description": "Human readable device name for the session list.",
+            "maxLength": 128
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "ProviderProfileDto": {
+        "type": "object",
+        "properties": {
+          "givenName": {
+            "type": "string"
+          },
+          "familyName": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          }
+        }
+      },
+      "ProviderLoginDto": {
+        "type": "object",
+        "properties": {
+          "client": {
+            "type": "string",
+            "description": "Client label: ios, android, web, wear, …",
+            "maxLength": 64
+          },
+          "deviceName": {
+            "type": "string",
+            "description": "Human readable device name for the session list.",
+            "maxLength": 128
+          },
+          "idToken": {
+            "type": "string",
+            "description": "Google / Apple ID token (JWT). Required for google.com and apple.com."
+          },
+          "accessToken": {
+            "type": "string",
+            "description": "Facebook access token. Required for facebook.com."
+          },
+          "nonce": {
+            "type": "string",
+            "description": "Raw nonce sent to Apple, if the client used one."
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ProviderProfileDto"
+          },
+          "language": {
+            "type": "string"
+          }
+        }
+      },
+      "FirebaseExchangeDto": {
+        "type": "object",
+        "properties": {
+          "client": {
+            "type": "string",
+            "description": "Client label: ios, android, web, wear, …",
+            "maxLength": 64
+          },
+          "deviceName": {
+            "type": "string",
+            "description": "Human readable device name for the session list.",
+            "maxLength": 128
+          },
+          "idToken": {
+            "type": "string",
+            "description": "Current Firebase ID token of the signed-in user."
+          }
+        },
+        "required": [
+          "idToken"
+        ]
+      },
+      "RefreshTokenDto": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "description": "The refresh token. Optional only so a browser can present the HttpOnly refresh cookie instead, which is how a web app whose storage the browser cleared gets back in. One of the two must be there, and the body wins when both are."
+          },
+          "requestId": {
+            "type": "string",
+            "description": "Opaque id identifying this renewal attempt. Generate one per renewal, keep it for every retry of that renewal including across app restarts, and drop it once the renewal succeeds. It lets the API tell a client retrying a request whose response was lost from someone replaying a stolen token, and serve the first without a time limit. Optional: without it the API falls back to a short grace window.",
+            "maxLength": 64
+          }
+        }
+      },
+      "AccessTokenResponseDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "expiresIn": {
+            "type": "number",
+            "description": "Seconds until the access token expires."
+          }
+        },
+        "required": [
+          "accessToken",
+          "expiresIn"
+        ]
+      },
+      "LogoutDto": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "description": "Refresh token of the session to end. When omitted the session of the bearer token is ended."
+          }
+        }
+      },
+      "AuthSessionInfoDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "client": {
+            "type": "string",
+            "nullable": true
+          },
+          "deviceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "userAgent": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When the session expires through inactivity; null means never."
+          },
+          "current": {
+            "type": "boolean",
+            "description": "True for the session the request was made with."
+          }
+        },
+        "required": [
+          "id",
+          "createdAt",
+          "lastUsedAt",
+          "current"
+        ]
+      },
+      "ForgotPasswordDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "language": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "ResetPasswordDto": {
+        "type": "object",
+        "properties": {
+          "client": {
+            "type": "string",
+            "description": "Client label: ios, android, web, wear, …",
+            "maxLength": 64
+          },
+          "deviceName": {
+            "type": "string",
+            "description": "Human readable device name for the session list.",
+            "maxLength": 128
+          },
+          "token": {
+            "type": "string",
+            "description": "Token from the reset link."
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 72
+          }
+        },
+        "required": [
+          "token",
+          "newPassword"
+        ]
+      },
+      "ChangePasswordDto": {
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "description": "Required when the account already has a password."
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 72
+          }
+        },
+        "required": [
+          "newPassword"
+        ]
+      },
+      "VerifyEmailDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Token from the verification link."
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "VerifyEmailResponseDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The address that is now verified."
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "ChangeEmailDto": {
+        "type": "object",
+        "properties": {
+          "newEmail": {
+            "type": "string",
+            "format": "email"
+          },
+          "currentPassword": {
+            "type": "string",
+            "description": "Required when the account has a password."
+          }
+        },
+        "required": [
+          "newEmail"
+        ]
+      },
+      "AuthMethodsDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "emailVerified": {
+            "type": "boolean"
+          },
+          "hasPassword": {
+            "type": "boolean",
+            "description": "Whether an email/password credential exists."
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "google.com",
+                "apple.com",
+                "facebook.com"
+              ]
+            }
+          }
+        },
+        "required": [
+          "email",
+          "emailVerified",
+          "hasPassword",
+          "providers"
+        ]
+      },
       "GetRecipeCollectionsWithImagesDto": {
         "type": "object",
         "properties": {
@@ -7893,13 +10932,18 @@
             "items": {
               "type": "string"
             }
+          },
+          "recipeCount": {
+            "type": "number",
+            "description": "Total number of recipes in the collection. May be larger than connectedRecipeImages.length because recipes without an image are still counted."
           }
         },
         "required": [
           "uuid",
           "name",
           "shareInList",
-          "connectedRecipeImages"
+          "connectedRecipeImages",
+          "recipeCount"
         ]
       },
       "CollectionWithRecipeFlag": {
@@ -8031,6 +11075,16 @@
               "normal"
             ],
             "default": "normal"
+          },
+          "targetLanguage": {
+            "type": "string",
+            "description": "Translate the parsed recipe into this language instead of preserving the source language. Accepts a BCP 47 tag (e.g. `de`, `en-US`, `pt-BR`). Only the human-readable fields are translated; unit codes, categories and allergens stay as their canonical identifiers. Omit to keep the source language (default). Only applies to the smart parser, since the basic parser does not run the recipe through a model.",
+            "example": "de"
+          },
+          "deferNutriments": {
+            "type": "boolean",
+            "description": "Leave `nutriments` and `allergens` out of the answer and estimate them with a follow-up call to `POST /parse-recipe/nutriments`. Roughly halves the wait, because the first call then needs almost no reasoning budget. Clients that do not set it keep the single call.",
+            "default": false
           }
         },
         "required": [
@@ -8093,6 +11147,23 @@
           "description"
         ]
       },
+      "ParseRecipeAdditionalAttachment": {
+        "type": "object",
+        "properties": {
+          "base64": {
+            "type": "string",
+            "description": "Base64-encoded data of the additional attachment"
+          },
+          "mimeType": {
+            "type": "string",
+            "description": "MIME type of the additional attachment",
+            "example": "image/jpeg"
+          }
+        },
+        "required": [
+          "base64"
+        ]
+      },
       "ParseRecipeFromAttachment": {
         "type": "object",
         "properties": {
@@ -8106,6 +11177,23 @@
             "description": "The mime type of the attachment",
             "example": "image/jpeg",
             "default": "image/jpeg"
+          },
+          "additionalAttachments": {
+            "description": "Optional additional attachments parsed together with the primary one. Used when one recipe spans multiple photos so the AI sees them as a single unit.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParseRecipeAdditionalAttachment"
+            }
+          },
+          "targetLanguage": {
+            "type": "string",
+            "description": "Translate the parsed recipe into this language instead of preserving the source language. Accepts a BCP 47 tag (e.g. `de`, `en-US`, `pt-BR`). Only the human-readable fields are translated; unit codes, categories and allergens stay as their canonical identifiers. Omit to keep the source language (default).",
+            "example": "de"
+          },
+          "deferNutriments": {
+            "type": "boolean",
+            "description": "Leave `nutriments` and `allergens` out of the answer and estimate them with a follow-up call to `POST /parse-recipe/nutriments`. Roughly halves the wait, because the first call then needs almost no reasoning budget. Clients that do not set it keep the single call.",
+            "default": false
           }
         },
         "required": [
@@ -8131,7 +11219,7 @@
           },
           "favorites": {
             "type": "number",
-            "description": "Number of times this recipe was favorited"
+            "description": "Number of times this recipe was favorited. Read-only — any value sent on create/update is ignored; it is computed from likes."
           },
           "description": {
             "type": "string",
@@ -8164,13 +11252,20 @@
           },
           "shouldBePublic": {
             "type": "boolean",
-            "description": "Whether the recipe is publicly visible"
+            "description": "Whether the recipe is publicly visible inside the app. Imports are kept out of the sitemap and carry robots: noindex regardless, so this never exposes somebody else's post to a search engine."
           },
           "categories": {
             "type": "array",
             "description": "Recipe categories",
             "items": {
               "$ref": "#/components/schemas/ReceiptCategory"
+            }
+          },
+          "allergens": {
+            "type": "array",
+            "description": "Allergens contained in the recipe (EU 14). Extracted by the recipe parser and/or derived from ingredients on save; clients should treat this as best-effort guidance, not a legal declaration.",
+            "items": {
+              "$ref": "#/components/schemas/Allergen"
             }
           },
           "language": {
@@ -8251,6 +11346,39 @@
             "type": "number",
             "description": "Number of ingredients in the recipe that match to the stock. Only set when requesting recipe pagination with current stock"
           },
+          "missingIngredients": {
+            "description": "Names of the recipe ingredients that are NOT covered by the current stock (pantry staples such as salt, oil or water are excluded and always treated as available). Only set when filtering by ingredients.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "substitutableCount": {
+            "type": "number",
+            "description": "Number of missing ingredients the user could substitute from their pantry. Counted separately from matches — show as a softer \"can substitute\" state, not as \"have it\". Only set when filtering by ingredients and a substitution applies."
+          },
+          "substitutableIngredients": {
+            "description": "Names of the recipe ingredients that are not in stock but covered by a curated substitution from the pantry. These are excluded from missingIngredients. Only set when filtering by ingredients.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "substitutions": {
+            "description": "Concrete \"use X instead of Y\" suggestions for the substitutable ingredients. Only set when filtering by ingredients and a substitution applies.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubstitutionSuggestionDto"
+            }
+          },
+          "source": {
+            "description": "Where this recipe came from and how much of it a model wrote. Present on every recipe response, no separate call needed. Read-only: the server derives the whole block from the recipe itself and ignores whatever the client sends for it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RecipeSourceDto"
+              }
+            ]
+          },
           "imageBase64": {
             "type": "string",
             "description": "Image in base64 format"
@@ -8264,7 +11392,6 @@
         "required": [
           "uuid",
           "name",
-          "favorites",
           "totalTime",
           "preparationTime",
           "defaultServings",
@@ -8285,42 +11412,163 @@
             "type": "string",
             "description": "The raw text of the recipe to parse",
             "example": "Banana Pancakes\n\nIngredients:\n- 2 bananas\n- 2 eggs\n\nDirections:\n1. Mash bananas..."
+          },
+          "targetLanguage": {
+            "type": "string",
+            "description": "Translate the parsed recipe into this language instead of preserving the source language. Accepts a BCP 47 tag (e.g. `de`, `en-US`, `pt-BR`). Only the human-readable fields are translated; unit codes, categories and allergens stay as their canonical identifiers. Omit to keep the source language (default).",
+            "example": "de"
+          },
+          "deferNutriments": {
+            "type": "boolean",
+            "description": "Leave `nutriments` and `allergens` out of the answer and estimate them with a follow-up call to `POST /parse-recipe/nutriments`. Roughly halves the wait, because the first call then needs almost no reasoning budget. Clients that do not set it keep the single call.",
+            "default": false
           }
         },
         "required": [
           "text"
         ]
       },
-      "MessageDto": {
+      "ParseRecipeCollectionAttachmentDto": {
         "type": "object",
         "properties": {
-          "from": {
-            "type": "string"
+          "base64": {
+            "type": "string",
+            "description": "Base64-encoded image or PDF."
           },
-          "subject": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "language": {
-            "type": "string"
-          },
-          "sendNoResponse": {
-            "type": "boolean"
-          },
-          "cloudflareToken": {
-            "type": "string"
+          "mimeType": {
+            "type": "string",
+            "description": "MIME type of the attachment.",
+            "example": "image/jpeg"
           }
         },
         "required": [
-          "from",
-          "subject",
-          "message",
-          "language",
-          "sendNoResponse",
-          "cloudflareToken"
+          "base64"
         ]
+      },
+      "ParseRecipeCollectionRequestDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "URL of a social post or recipe page. A carousel with several recipes yields several results.",
+            "example": "https://www.instagram.com/p/ABC123/"
+          },
+          "attachments": {
+            "description": "Photos or PDFs. Images are grouped by recipe automatically: pages of one recipe become one result, distinct recipes become distinct results.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParseRecipeCollectionAttachmentDto"
+            }
+          },
+          "targetLanguage": {
+            "type": "string",
+            "description": "Translate the parsed recipes into this language instead of preserving the source language. BCP 47 tag.",
+            "example": "de"
+          },
+          "deferNutriments": {
+            "type": "boolean",
+            "description": "Leave `nutriments` and `allergens` out of the answer and estimate them with a follow-up call to `POST /parse-recipe/nutriments`. Roughly halves the wait, because the first call then needs almost no reasoning budget. Clients that do not set it keep the single call.",
+            "default": false
+          }
+        }
+      },
+      "RecipeParsingCollectionResultDto": {
+        "type": "object",
+        "properties": {
+          "recipes": {
+            "description": "Every recipe found, in source order. Empty when the input held no recipe.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecipeParsingResultDto"
+            }
+          },
+          "sourceCount": {
+            "type": "number",
+            "description": "How many recipe candidates the source contained before the per-import cap: image groups for photos and carousels, entries for an export file."
+          },
+          "skippedCount": {
+            "type": "number",
+            "description": "Candidates beyond the per-import cap that were not parsed. The client can tell the user to import the rest separately."
+          },
+          "skippedPageCount": {
+            "type": "number",
+            "description": "PDF pages beyond the per-import page cap that were not read. Absent or 0 when every page was read."
+          }
+        },
+        "required": [
+          "recipes",
+          "sourceCount",
+          "skippedCount"
+        ]
+      },
+      "ParseNutrimentsIngredientDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Ingredient name as the recipe lists it."
+          },
+          "contentVolume": {
+            "type": "number",
+            "description": "Amount in `volumeUnit`."
+          },
+          "volumeUnit": {
+            "type": "string",
+            "description": "Unit of the amount, e.g. `g`."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ParseNutrimentsRequestDto": {
+        "type": "object",
+        "properties": {
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParseNutrimentsIngredientDto"
+            }
+          },
+          "defaultServings": {
+            "type": "number",
+            "description": "Servings the amounts above are for. Defaults to 1.",
+            "example": 4
+          },
+          "servingsUnit": {
+            "type": "string",
+            "description": "Serving unit, e.g. `Portion`.",
+            "example": "Portion"
+          },
+          "targetLanguage": {
+            "type": "string",
+            "description": "Translate nothing but keep the analysis consistent with this language. BCP 47 tag.",
+            "example": "de"
+          }
+        },
+        "required": [
+          "ingredients"
+        ]
+      },
+      "ParseNutrimentsResultDto": {
+        "type": "object",
+        "properties": {
+          "nutriments": {
+            "description": "Per serving. Absent when nothing could be estimated.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ArticleNutrimentsDto"
+              }
+            ]
+          },
+          "allergens": {
+            "description": "EU 14 allergens found in the ingredients.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "CreateSubscriptionDto": {
         "type": "object",
@@ -8540,11 +11788,12 @@
         "properties": {
           "invitedUserEmail": {
             "type": "string"
+          },
+          "invitedUserUid": {
+            "type": "string",
+            "description": "Uid of a member of one of the inviter's lists; others are rejected with 403."
           }
-        },
-        "required": [
-          "invitedUserEmail"
-        ]
+        }
       },
       "SyncFirebaseInvitationDto": {
         "type": "object",
@@ -8585,6 +11834,99 @@
         "required": [
           "topic",
           "notification"
+        ]
+      },
+      "AppVersionPolicyDto": {
+        "type": "object",
+        "properties": {
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android",
+              "web"
+            ]
+          },
+          "minimumVersion": {
+            "type": "string",
+            "nullable": true,
+            "description": "Versions below this are blocked until updated. Null when nothing is forced."
+          },
+          "recommendedVersion": {
+            "type": "string",
+            "nullable": true,
+            "description": "Versions below this get a dismissible hint. Null when there is none."
+          },
+          "messageDe": {
+            "type": "string",
+            "nullable": true,
+            "description": "Why the update is needed, in German."
+          },
+          "messageEn": {
+            "type": "string",
+            "nullable": true,
+            "description": "Why the update is needed, in English."
+          }
+        },
+        "required": [
+          "platform",
+          "minimumVersion",
+          "recommendedVersion",
+          "messageDe",
+          "messageEn"
+        ]
+      },
+      "HelpArticleDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "preview": {
+            "type": "string",
+            "description": "The start of the answer as plain text."
+          },
+          "url": {
+            "type": "string",
+            "description": "The article on pantrist.com."
+          }
+        },
+        "required": [
+          "title",
+          "preview",
+          "url"
+        ]
+      },
+      "ReportSubstitutionDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Optional free-text reason (\"does not work in baking\").",
+            "maxLength": 500
+          }
+        }
+      },
+      "ReportSubstitutionResultDto": {
+        "type": "object",
+        "properties": {
+          "reportCount": {
+            "type": "number",
+            "description": "Distinct users who reported this substitution so far."
+          },
+          "status": {
+            "type": "string",
+            "description": "Lifecycle after this report. `disabled` means the hint will no longer be shown to anyone.",
+            "enum": [
+              "live",
+              "rejected",
+              "disabled"
+            ]
+          }
+        },
+        "required": [
+          "reportCount",
+          "status"
         ]
       },
       "ClientLogEntryDto": {
@@ -8667,6 +12009,789 @@
         "required": [
           "accepted",
           "rejected"
+        ]
+      },
+      "CreateNfcTagDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Client-supplied tag id (e.g. generated by a local, account-less client). Reusing the same id upserts the existing tag instead of creating a duplicate. Omit to let the server generate one."
+          },
+          "itemId": {
+            "type": "string",
+            "description": "UUID of the pantry article to deplete"
+          },
+          "amountChange": {
+            "type": "number",
+            "description": "Signed delta applied on trigger (negative reduces, e.g. -1)"
+          },
+          "label": {
+            "type": "string",
+            "description": "Optional label"
+          }
+        },
+        "required": [
+          "itemId",
+          "amountChange"
+        ]
+      },
+      "NfcTagDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "listId": {
+            "type": "string"
+          },
+          "itemId": {
+            "type": "string",
+            "nullable": true,
+            "description": "UUID of the linked pantry article, or null if that article was deleted."
+          },
+          "amountChange": {
+            "type": "number"
+          },
+          "label": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastWrittenAt": {
+            "type": "number",
+            "nullable": true,
+            "description": "Epoch milliseconds when the tag was last successfully written to a physical NFC tag, or null if never written."
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "listId",
+          "itemId",
+          "amountChange",
+          "label",
+          "lastWrittenAt",
+          "createdAt"
+        ]
+      },
+      "UpdateNfcTagDto": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string"
+          },
+          "amountChange": {
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          }
+        }
+      },
+      "LoyaltyCardFormat": {
+        "type": "string",
+        "enum": [
+          "ean13",
+          "ean8",
+          "upca",
+          "upce",
+          "code128",
+          "code39",
+          "code93",
+          "itf",
+          "codabar",
+          "qr",
+          "pdf417",
+          "aztec",
+          "datamatrix"
+        ]
+      },
+      "LoyaltyCardDto": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string"
+          },
+          "ownerUid": {
+            "type": "string",
+            "description": "The user who owns and may edit the card."
+          },
+          "label": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "format": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoyaltyCardFormat"
+              }
+            ]
+          },
+          "color": {
+            "type": "string",
+            "nullable": true
+          },
+          "retailerKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "listId": {
+            "type": "string",
+            "nullable": true
+          },
+          "supermarketUid": {
+            "type": "string",
+            "nullable": true
+          },
+          "sharedListId": {
+            "type": "string",
+            "nullable": true,
+            "description": "List the card is shared with. Null when private, and also when the owner has left that list."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "uuid",
+          "ownerUid",
+          "label",
+          "code",
+          "format",
+          "color",
+          "retailerKey",
+          "listId",
+          "supermarketUid",
+          "sharedListId",
+          "updatedAt"
+        ]
+      },
+      "UpsertLoyaltyCardDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Display name, e.g. the market name."
+          },
+          "code": {
+            "type": "string",
+            "description": "Card number or QR payload, exactly as encoded in the code."
+          },
+          "format": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoyaltyCardFormat"
+              }
+            ]
+          },
+          "color": {
+            "type": "string",
+            "nullable": true,
+            "description": "Card colour as #rrggbb, null for the default."
+          },
+          "retailerKey": {
+            "type": "string",
+            "nullable": true,
+            "description": "Chain the card belongs to (e.g. \"lidl\"). Matches every market of that chain in every list. Set either this or listId + supermarketUid."
+          },
+          "listId": {
+            "type": "string",
+            "nullable": true,
+            "description": "List of the custom market the card belongs to."
+          },
+          "supermarketUid": {
+            "type": "string",
+            "nullable": true,
+            "description": "Uid of the custom market (in listId) the card belongs to."
+          },
+          "sharedListId": {
+            "type": "string",
+            "nullable": true,
+            "description": "List whose members may show the card too. Null keeps it private. Must equal listId for a card bound to a custom market."
+          }
+        },
+        "required": [
+          "label",
+          "code",
+          "format"
+        ]
+      },
+      "RegisterMarketArrivalDeviceDto": {
+        "type": "object",
+        "properties": {
+          "fcmToken": {
+            "type": "string",
+            "description": "This phone's FCM token, so the arrival push reaches only it. Without one the push goes to all of the user's devices."
+          }
+        }
+      },
+      "MarketArrivalDeviceDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Secret for the native transition POST (header x-market-arrival-token). Returned once; only its hash is stored."
+          }
+        },
+        "required": [
+          "id",
+          "token"
+        ]
+      },
+      "MarketArrivalPayloadDto": {
+        "type": "object",
+        "properties": {
+          "listId": {
+            "type": "string"
+          },
+          "marketUid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "listId",
+          "marketUid"
+        ]
+      },
+      "MarketArrivalTransitionDto": {
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "Region identifier set by the app"
+          },
+          "transition": {
+            "type": "string",
+            "enum": [
+              "enter",
+              "exit"
+            ]
+          },
+          "enter": {
+            "type": "boolean"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/MarketArrivalPayloadDto"
+          }
+        },
+        "required": [
+          "identifier",
+          "transition"
+        ]
+      },
+      "StoreDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Pantrist store id — stable across imports."
+          },
+          "retailerKey": {
+            "type": "string",
+            "description": "Chain key, e.g. \"lidl\"."
+          },
+          "retailerName": {
+            "type": "string",
+            "description": "Chain display name, e.g. \"Lidl\"."
+          },
+          "name": {
+            "type": "string"
+          },
+          "street": {
+            "type": "string"
+          },
+          "zip": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "latitude": {
+            "type": "number",
+            "description": "WGS84 latitude."
+          },
+          "longitude": {
+            "type": "number",
+            "description": "WGS84 longitude."
+          },
+          "distanceMeters": {
+            "type": "number",
+            "description": "Distance to the queried point in metres. Only set by the nearby search."
+          },
+          "openingHours": {
+            "type": "object",
+            "description": "Opening hours as published by the chain, unnormalised."
+          },
+          "noOffersReason": {
+            "type": "string",
+            "enum": [
+              "NO_SOURCE_FOR_REGION"
+            ],
+            "description": "Set when the market is shown without offers because no source carries its region. The app greys it out and explains it per chain."
+          },
+          "externalOffersUrl": {
+            "type": "string",
+            "description": "Where the chain shows this market's offers itself. Only set together with noOffersReason."
+          }
+        },
+        "required": [
+          "id",
+          "retailerKey",
+          "retailerName",
+          "name",
+          "latitude",
+          "longitude"
+        ]
+      },
+      "OfferIngredientMatchDto": {
+        "type": "object",
+        "properties": {
+          "ingredientId": {
+            "type": "string",
+            "description": "Ingredient id in the Pantrist catalog."
+          },
+          "name": {
+            "type": "string",
+            "description": "Localised catalog name in the requested language."
+          },
+          "confidence": {
+            "type": "number",
+            "description": "0..1. Below 0.6 the app must hedge the wording."
+          },
+          "matchMethod": {
+            "type": "string",
+            "enum": [
+              "gtin",
+              "text",
+              "llm",
+              "manual"
+            ]
+          },
+          "diet": {
+            "type": "string",
+            "description": "What the catalog says this ingredient contains: vegan, vegetarian (animal produce but no flesh), fish or meat. Absent while nobody has classified the entry.\n\nSent rather than applied, because this endpoint is anonymous and publicly cached: one filtered answer must never be served to the next reader. A client that knows what its user eats can filter on it, and the answer stays the same for everybody.",
+            "enum": [
+              "vegan",
+              "vegetarian",
+              "fish",
+              "meat"
+            ]
+          },
+          "allergens": {
+            "type": "array",
+            "description": "Declarable allergens the catalog names for this ingredient. An empty list means none were named, which is not a statement that the product is safe, and no client may present it as one.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "Gluten",
+                "Crustaceans",
+                "Eggs",
+                "Fish",
+                "Peanuts",
+                "Soybeans",
+                "Milk",
+                "Nuts",
+                "Celery",
+                "Mustard",
+                "Sesame",
+                "SulphurDioxide",
+                "Lupin",
+                "Molluscs"
+              ]
+            }
+          }
+        },
+        "required": [
+          "ingredientId",
+          "name",
+          "confidence",
+          "matchMethod"
+        ]
+      },
+      "OfferDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "brand": {
+            "type": "string"
+          },
+          "priceCents": {
+            "type": "number",
+            "description": "Offer price in cents."
+          },
+          "refPriceCents": {
+            "type": "number",
+            "description": "Struck-through reference price in cents."
+          },
+          "unitAmount": {
+            "type": "number",
+            "description": "Size of the whole pack, e.g. 1 with unitType \"kg\". For a multipack this is all units together: 10 (l) for a crate of 20 × 0,5 l, see packCount."
+          },
+          "unitType": {
+            "type": "string"
+          },
+          "packCount": {
+            "type": "number",
+            "description": "How many equal units the pack holds, when more than one: 20 for a crate of 20 × 0,5 l. One unit is unitAmount / packCount. Absent for a single unit or when the retailer does not say."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "clearance"
+            ],
+            "description": "clearance: sold until stock runs out; validTo is a rolling one-day window, not an end date. Prices are the chain's online prices."
+          },
+          "imageUrl": {
+            "type": "string",
+            "description": "The retailer's own image URL. Load it directly from that URL — we neither store nor re-serve the image, and the retailer's server sees the request."
+          },
+          "sourceCategorySlug": {
+            "type": "string",
+            "description": "Stable machine key for the source's own department/category (e.g. \"kaese-quark\"), when it has one. Sparse — most offers have none. The app maps this to its own shopping-list category."
+          },
+          "sourceCategoryName": {
+            "type": "string",
+            "description": "Display name for sourceCategorySlug (e.g. \"Käse\")."
+          },
+          "categoryUuid": {
+            "type": "string",
+            "description": "The app's own category id, already resolved from the source category. Pass this straight through when adding the offer to the shopping list; unset means the source had no (mappable) category, so the app's own name-based categorizer should decide instead."
+          },
+          "validFrom": {
+            "type": "string",
+            "description": "First day the offer is valid (ISO date). Lies in the future on a day between two leaflets (e.g. a Sunday for a Monday-to-Saturday chain): the market then shows the next leaflet, which starts within three days, so the client should label it as upcoming rather than current."
+          },
+          "validTo": {
+            "type": "string",
+            "description": "Last day the offer is valid (ISO date)."
+          },
+          "ingredients": {
+            "description": "Catalog ingredients this offer was matched to. May be empty.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OfferIngredientMatchDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "validFrom",
+          "validTo",
+          "ingredients"
+        ]
+      },
+      "StoreOffersDto": {
+        "type": "object",
+        "properties": {
+          "storeId": {
+            "type": "string"
+          },
+          "retailerKey": {
+            "type": "string"
+          },
+          "storeName": {
+            "type": "string"
+          },
+          "latitude": {
+            "type": "number"
+          },
+          "longitude": {
+            "type": "number"
+          },
+          "offers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OfferDto"
+            }
+          },
+          "noOffersReason": {
+            "type": "string",
+            "enum": [
+              "NO_SOURCE_FOR_REGION"
+            ],
+            "description": "Set when the market is shown without offers because no source carries its region. The app greys it out and explains it per chain."
+          },
+          "externalOffersUrl": {
+            "type": "string",
+            "description": "Where the chain shows this market's offers itself. Only set together with noOffersReason."
+          }
+        },
+        "required": [
+          "storeId",
+          "retailerKey",
+          "storeName",
+          "latitude",
+          "longitude",
+          "offers"
+        ]
+      },
+      "OfferSearchResultDto": {
+        "type": "object",
+        "properties": {
+          "store": {
+            "$ref": "#/components/schemas/StoreDto"
+          },
+          "matchingOffers": {
+            "description": "Only the offers at this store matching the search text — not the full catalog (see findOffersForStore for that).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OfferDto"
+            }
+          }
+        },
+        "required": [
+          "store",
+          "matchingOffers"
+        ]
+      },
+      "PantryOfferMatchDto": {
+        "type": "object",
+        "properties": {
+          "listItemUuid": {
+            "type": "string",
+            "description": "The pantry item's own uuid (list_item.uuid)."
+          },
+          "articleName": {
+            "type": "string",
+            "description": "The pantry item's own name, not the catalog ingredient's."
+          },
+          "amount": {
+            "type": "number"
+          },
+          "minimumAmount": {
+            "type": "number"
+          },
+          "storeId": {
+            "type": "string"
+          },
+          "storeName": {
+            "type": "string"
+          },
+          "retailerKey": {
+            "type": "string"
+          },
+          "offer": {
+            "description": "The cheapest current offer matching this item, at the store above. Only one per pantry item — see findPantryMatchesForUser.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OfferDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "listItemUuid",
+          "articleName",
+          "amount",
+          "minimumAmount",
+          "storeId",
+          "storeName",
+          "retailerKey",
+          "offer"
+        ]
+      },
+      "SetUserStoresDto": {
+        "type": "object",
+        "properties": {
+          "storeIds": {
+            "description": "Store ids in display order, at most 10.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "storeIds"
+        ]
+      },
+      "OfferRecipeIngredientDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Ingredient name as it appears in the recipe."
+          },
+          "amount": {
+            "type": "number",
+            "description": "Amount the recipe calls for."
+          },
+          "unit": {
+            "type": "string",
+            "description": "Unit the recipe states the amount in."
+          },
+          "inOffer": {
+            "type": "boolean",
+            "description": "False when no current offer covers this ingredient. Such an ingredient carries no price at all rather than an invented one."
+          },
+          "offerId": {
+            "type": "string",
+            "description": "The offer this was priced from."
+          },
+          "offerTitle": {
+            "type": "string",
+            "description": "Offer headline, as the leaflet prints it."
+          },
+          "offerImageUrl": {
+            "type": "string",
+            "description": "The leaflet's own picture of the offer, where the source published one. What the shelf looks like settles in one glance whether the match is the right product, which a headline often does not."
+          },
+          "offerBrand": {
+            "type": "string",
+            "description": "Brand the leaflet names, where it names one. Together with the picture it is what tells a shopper whether this is the product they meant."
+          },
+          "offerSubstitutesFor": {
+            "type": "string",
+            "description": "Set when the offer is not the ingredient itself but something that may stand in for it, because the ingredient is off the caller's diet: a vegan reading a Frikadellen recipe is shown the plant-based mince that is on offer, not the beef. Carries the recipe ingredient's own name, so the page can say what is being replaced.",
+            "example": "Hackfleisch"
+          },
+          "offerSubstitutionNote": {
+            "type": "string",
+            "description": "Why that swap is acceptable, from the curated substitution edge, in the requested language.",
+            "example": "Pflanzliche Variante, 1:1 ersetzbar"
+          },
+          "storeName": {
+            "type": "string",
+            "description": "Store the offer is at."
+          },
+          "retailerKey": {
+            "type": "string",
+            "description": "Retailer key of that store."
+          },
+          "validFrom": {
+            "type": "string",
+            "description": "First day this offer is valid (ISO date)."
+          },
+          "validTo": {
+            "type": "string",
+            "description": "Last day this offer is valid (ISO date)."
+          },
+          "offerPriceCents": {
+            "type": "number",
+            "description": "Offer price for the whole pack, in cents."
+          },
+          "refPriceCents": {
+            "type": "number",
+            "description": "The struck-through reference price in cents, where the chain publishes one."
+          },
+          "estimatedCostCents": {
+            "type": "number",
+            "description": "Share of the pack price attributable to the amount this recipe uses, in cents."
+          },
+          "costIsUpperBound": {
+            "type": "boolean",
+            "description": "True when the share above is an upper bound rather than a proportion, because no pack size was published or the recipe states an amount like \"2 pieces\" that does not convert into one. Render it as \"at most\", never as a price."
+          }
+        },
+        "required": [
+          "name",
+          "amount",
+          "unit",
+          "inOffer",
+          "costIsUpperBound"
+        ]
+      },
+      "OfferRecipeIdeaDto": {
+        "type": "object",
+        "properties": {
+          "recipe": {
+            "$ref": "#/components/schemas/RecipeDto"
+          },
+          "isOwn": {
+            "type": "boolean",
+            "description": "True when the recipe is the caller's own. Own recipes take part like any other, private ones included, and rank ahead of others with the same coverage."
+          },
+          "ingredientOffers": {
+            "description": "Every ingredient of the recipe, with the offer covering it where there is one.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OfferRecipeIngredientDto"
+            }
+          },
+          "dietHiddenCount": {
+            "type": "number",
+            "description": "How many offers the reader's diet kept off this recipe. Present only when it kept some. It exists because an offer that was filtered away looks exactly like one that never existed, and the chain behind the filter (catalog entry, classification, matching) can be wrong in ways nobody would ever find out about. With a number, a page can say that something is missing and offer to show it.",
+            "example": 5
+          },
+          "matchedIngredientCount": {
+            "type": "number",
+            "description": "How many of the recipe's non-staple ingredients are on offer right now."
+          },
+          "ingredientCount": {
+            "type": "number",
+            "description": "How many non-staple ingredients the recipe has. Salt, oil and water are excluded from both counts, so a recipe is not punished for needing them."
+          },
+          "totalCostCents": {
+            "type": "number",
+            "description": "Sum of the per-ingredient shares, in cents. Only ingredients actually on offer contribute, so this is a floor for the shopping bill, not the bill."
+          },
+          "costPerServingCents": {
+            "type": "number",
+            "description": "Estimated cost per serving, in cents."
+          },
+          "costIsEstimate": {
+            "type": "boolean",
+            "description": "Always true. Every price here is an estimate from the offers currently on the shelf, and the app must label it as one. It is computed per request, so it never goes stale, it just changes."
+          },
+          "storeNames": {
+            "description": "Stores the matched offers are at.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "validTo": {
+            "type": "string",
+            "description": "Last day all the matched offers are still valid (ISO date), i.e. the earliest end among them."
+          }
+        },
+        "required": [
+          "recipe",
+          "isOwn",
+          "ingredientOffers",
+          "matchedIngredientCount",
+          "ingredientCount",
+          "costIsEstimate",
+          "storeNames"
+        ]
+      },
+      "OfferRecipeIdeasResponseDto": {
+        "type": "object",
+        "properties": {
+          "ideas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OfferRecipeIdeaDto"
+            }
+          },
+          "offeredIngredientCount": {
+            "type": "number",
+            "description": "How many catalog ingredients are on offer at the given stores. Zero means the empty state, not an error."
+          },
+          "generatedForYou": {
+            "type": "boolean",
+            "description": "True when this request triggered a generation for the caller's region and preferences because the pool had too little to offer. The ideas above already include what it produced."
+          }
+        },
+        "required": [
+          "ideas",
+          "offeredIngredientCount",
+          "generatedForYou"
         ]
       }
     }

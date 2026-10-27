@@ -81,6 +81,22 @@ export function registerTools(server: McpServer): void {
 
   // --- shopping list -------------------------------------------------------
   server.tool(
+    'list_supermarkets',
+    'List the markets (supermarkets, shops) set up on the list `listId`. Read-only. Returns an array of `{ uid, name }`. Pass a `uid` in `supermarketIds` of `add_shopping_item` to put an item on that market\'s list, instead of writing the shop into the item name.',
+    { ...listIdArg },
+    async ({ listId }) => {
+      const markets = unwrap(
+        await client().GET('/list/{listId}/supermarkets', {
+          params: { path: { listId: resolveListId(listId) } },
+        }),
+      );
+      // Only what identifies a market; the full dto also carries the
+      // store's coordinates and category order the model has no use for.
+      return text(markets.map(({ uid, name }) => ({ uid, name })));
+    },
+  );
+
+  server.tool(
     'list_shopping_items',
     'List all items currently on the shopping list for `listId`. Read-only. Returns an array of `ArticleDto` objects (`uuid`, `name`, `amount`, `unitId`, `categoryUuid`, `pantrySettings`, …); empty array if the list is empty. For pantry items use `list_pantry_items`; to add a new shopping item use `add_shopping_item`.',
     { ...listIdArg },
@@ -96,21 +112,27 @@ export function registerTools(server: McpServer): void {
 
   server.tool(
     'add_shopping_item',
-    'Add an item to the shopping list by name. The API matches `name` against the user\'s article catalog: an existing article is reused (its category, unit and price history preserved); a new article is created on first use. Returns the resulting `ArticleDto`. To add directly to the pantry instead use `add_pantry_item`; to mark an existing shopping item bought use `check_shopping_item`.',
+    'Add an item to the shopping list by name. The API matches `name` against the user\'s article catalog: an existing article is reused (its category, unit and price history preserved); a new article is created on first use. To have it bought at a particular shop, pass that market in `supermarketIds` (from `list_supermarkets`); never put the shop into `name`. Returns the resulting `ArticleDto`. To add directly to the pantry instead use `add_pantry_item`; to mark an existing shopping item bought use `check_shopping_item`.',
     {
       name: z
         .string()
         .describe(
-          'Item name, e.g. "Milk". Matched case-insensitively against the article catalog; an exact match reuses the existing article.',
+          'Item name, e.g. "Milk", without the shop. Matched case-insensitively against the article catalog; an exact match reuses the existing article.',
+        ),
+      supermarketIds: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Markets to buy the item at: `uid`s from `list_supermarkets` for the same list. An unknown uid is rejected. Omit for an item not tied to a shop.',
         ),
       ...listIdArg,
     },
-    async ({ name, listId }) =>
+    async ({ name, supermarketIds, listId }) =>
       text(
         unwrap(
           await client().POST('/list/{listId}/shoppingList/add-by-name', {
             params: { path: { listId: resolveListId(listId) } },
-            body: { name },
+            body: supermarketIds?.length ? { name, supermarketIds } : { name },
           }),
         ),
       ),

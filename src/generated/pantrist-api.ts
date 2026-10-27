@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/recipe/plan-stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Past week-plan stats per recipe across all of the user lists */
+        get: operations["RecipeController_getPlanStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/recipe/filter": {
         parameters: {
             query?: never;
@@ -13,8 +30,51 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Get recipes matching a complex filter */
+        /**
+         * Get recipes matching a complex filter
+         * @description Browseable without an account. When a token is supplied it personalises (private recipes, pantry hydration, own-recipe inclusion via userUidToInclude); anonymous callers get the public catalogue.
+         */
         post: operations["RecipeController_getByFilter"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recipe/filter/paginated": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get recipes matching a complex filter (paginated)
+         * @description Same filtering as POST /recipe/filter, but with correct LIMIT/OFFSET pagination: each page returns its own 10-item window. The legacy POST /recipe/filter returns a growing rows-1..N*10 window and is kept for backwards compatibility — new clients should use this endpoint. Browseable without an account; personalisation kicks in when a token is supplied.
+         */
+        post: operations["RecipeController_getByFilterPaginated"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recipe/match-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Score a batch of recipes against the caller pantry
+         * @description Returns matching_count / ingredient_count / missingIngredients per requested uuid. Lets the recipe overview and the detail page show have/missing badges without forcing a pantry-filtered list query: the app batches the uuids currently in view and pulls just the match summary for them. Capped at 50 uuids per request. With a token the pantry is hydrated server-side from the caller lists; without one, pass the device's pantry in `ingredients`. Staples are scored from the recipe side either way, so they come back even for an empty pantry. Only recipes the caller may see are reported on.
+         */
+        post: operations["RecipeController_getMatchState"];
         delete?: never;
         options?: never;
         head?: never;
@@ -80,12 +140,55 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a recipe by UUID */
+        /**
+         * Get a recipe by UUID
+         * @description Anonymous-friendly: callable with a Firebase token, a custom API key, a signed x-api-key, or with no credentials at all. When a user identity is resolved, the caller also sees their own private recipes and those of connected list users.
+         */
         get: operations["RecipeController_getRecipe"];
         put?: never;
         post?: never;
         /** Delete a recipe completely (requires authentication) */
         delete: operations["RecipeController_deleteReceipt"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recipe/swipe/deck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get a randomised deck of recipes the user has not swiped yet
+         * @description Returns fresh cards every call: recipes the user has already liked are excluded forever and recipes they skipped are excluded for a recycle window, so planning sessions keep surfacing different recipes. Accepts the full recipe filter (dietaryStyles, excludeAllergens, ingredients/pantry, language, time, …). Browseable without an account; when a token *is* supplied the deck personalises (excludes already-swiped recipes, applies pantry hydration).
+         */
+        post: operations["RecipeSwipeController_getDeck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recipe/swipe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a swipe decision (like/skip)
+         * @description On 'like' you may pass a weekPlan target to plan the recipe straight into a household day.
+         */
+        post: operations["RecipeSwipeController_swipe"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -351,6 +454,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/list/{listId}/articleCatalog/overlay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a list's catalog as overlay on the default catalog */
+        get: operations["ListArticleCatalogController_getArticleCatalogOverlay"];
+        /**
+         * Replace a list's catalog with an overlay on the default catalog
+         * @description Stores exactly `rows` on the default catalog of `seedLang` and puts the list on the overlay. 409 `CATALOG_OVERLAY_UNAVAILABLE`: the list is kept legacy, replace it with `PUT :listId/articleCatalog` instead. 400 `CATALOG_SEED_LANGUAGE_UNKNOWN` / `CATALOG_TOMBSTONE_NOT_SEED` for an unknown language or a tombstone without a `seed:` uuid.
+         */
+        put: operations["ListArticleCatalogController_replaceArticleCatalogOverlay"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/list/{listId}/articleCatalog/{itemId}": {
         parameters: {
             query?: never;
@@ -369,6 +493,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/list/{listId}/purchases/aisle-order/markets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Markets with a learned aisle order, without the order itself. For every account: the app tells free users once there is one. */
+        get: operations["ListPurchasesController_getAisleOrderMarkets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/list/{listId}/purchases/aisle-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Learned aisle order per market: where categories and products are checked off within a shopping trip, from the last 180 days. */
+        get: operations["ListPurchasesController_getAisleOrder"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/list/{listId}/purchases": {
         parameters: {
             query?: never;
@@ -376,11 +534,28 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get all purchases for a list. Optionally filter by from/to ISO dates. */
+        /** Get the purchases of a list in a date range (from/to as YYYY-MM-DD, both inclusive), newest first. Without both, every purchase. For the history use `/purchases/recent`. */
         get: operations["ListPurchasesController_getPurchases"];
         put?: never;
         /** Add a single purchase to the list history */
         post: operations["ListPurchasesController_addPurchase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/list/{listId}/purchases/recent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Purchase history, newest first, paged. Follow `nextCursor` via `before` until it is absent. */
+        get: operations["ListPurchasesController_getRecentPurchases"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -394,7 +569,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get a single purchase by its row ID */
+        get: operations["ListPurchasesController_getPurchase"];
         put?: never;
         post?: never;
         /** Delete a purchase by its row ID */
@@ -474,6 +650,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/list/{listId}/weekPlan/{date}/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add one entry to a day and keep the others
+         * @description Unlike PUT, which replaces the whole day with what the caller has, this leaves entries the caller has not seen yet (planned on another device) alone. Adding an entry the day already holds changes nothing, so a retried request never plans a recipe twice. Returns the whole day.
+         */
+        post: operations["ListWeekPlanController_addEntry"];
+        /**
+         * Remove one entry from a day and keep the others
+         * @description Removes the recipe `uuid` (type recipe) or the manual entry `name` (type manual). Removing an entry the day does not hold changes nothing. Returns the whole day.
+         */
+        delete: operations["ListWeekPlanController_removeEntry"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/list/{listId}/categories": {
         parameters: {
             query?: never;
@@ -505,6 +705,23 @@ export interface paths {
         post?: never;
         /** Delete a single category */
         delete: operations["ListCategoriesController_deleteCategory"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/list/{listId}/supermarkets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get all supermarkets for a list */
+        get: operations["ListSupermarketsController_getSupermarkets"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -709,7 +926,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Search shopping list items by name (case-insensitive contains) */
+        /** Search shopping list items by name, best match first (ignores case, hyphens, spaces and umlauts; tolerates a typo or plural) */
         get: operations["ShoppingListItemsController_searchItems"];
         put?: never;
         post?: never;
@@ -940,7 +1157,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Search pantry list items by name (case-insensitive contains) */
+        /** Search pantry list items by name, best match first (ignores case, hyphens, spaces and umlauts; tolerates a typo or plural) */
         get: operations["PantryListItemsController_searchItems"];
         put?: never;
         post?: never;
@@ -1067,8 +1284,53 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get suggested deltas since the cursor */
+        /**
+         * Get suggested deltas since the cursor
+         * @description `since` is the caller's baseline. Each item resolves its own window from the point it was last accounted for, so members of a shared list are not asked for a window another member already confirmed. A non-empty result marks exactly the returned items as accounted for as of NOW: the app presents the modal precisely when rows come back, so those items count as seen from here on. Items that are NOT returned keep the consumption they have accrued, which is what the list-wide cursor bump used to destroy.
+         */
         get: operations["AutoReduceController_accrual"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/list/{listId}/auto-reduce/cursor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the list-wide auto-reduce cursor
+         * @description Start of the next accrual window, shared by every member of the list. Null until the modal has been presented for this list once; the app then falls back to its per-user baseline.
+         */
+        get: operations["AutoReduceController_getCursor"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Deprecated: no longer moves anything
+         * @deprecated
+         * @description Kept so app versions that call this after the modal keep working. It writes nothing and returns the stored cursor unchanged. Settling is per item now and happens in GET accrual: moving a list-wide cursor reset the window for items the user was never shown and discarded the consumption they had accrued.
+         */
+        patch: operations["AutoReduceController_bumpCursor"];
+        trace?: never;
+    };
+    "/list/{listId}/auto-reduce/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Items that would be auto-reduced if defaultAutoReduce were on. Read-only; does NOT consult the flag. */
+        get: operations["AutoReduceController_preview"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1086,23 +1348,6 @@ export interface paths {
         };
         /** Suggest a consumption rate for an item */
         get: operations["AutoReduceController_suggestRate"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/list/{listId}/buy-reminders": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get items typically bought around now but not yet on the list */
-        get: operations["BuyRemindersController_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1152,12 +1397,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Download a stored image
+         * @description Streams the image stored at the given S3 key. Keys follow the `{type}/{listId}/{id}` convention (e.g. `article/{listId}/{articleId}`). Pass `thumbnail=true` to receive a small (~100px wide) PNG preview instead of the full-resolution original; omit it (or send any value other than `true`) to get the original. This endpoint is public and unauthenticated — the unguessable UUID-based key is the capability, so the URL can be embedded directly in `<img>`/lightbox views.
+         */
+        get: operations["S3Controller_getImage"];
         put?: never;
         post?: never;
         /**
          * Delete a file from storage
-         * @description Deletes the object (and its thumbnail) at the given S3 key. If `ownerType` and `ownerId` are provided, the named row is excluded from the reference-count check so its own surviving `imageUrl` does not block the delete; the file is kept only when another row still references it. When the owner params are omitted, the file is deleted unconditionally.
+         * @description Deletes the object (and its thumbnail) at the given S3 key. Barcode images (`barcode/…` keys) are a global shared resource and cannot be deleted — they are only ever replaced (override), so such requests are rejected with 403. For list-scoped keys (`article/`, `catalog/`, `pantry/`, `supermarket/`) the caller must be a member of the list embedded in the key; trusted server callers (shared-secret API key, no user identity) bypass this check. If `ownerType` and `ownerId` are provided, the named row is excluded from the reference-count check so its own surviving `imageUrl` does not block the delete; the file is kept only when another row still references it. When the owner params are omitted, the file is deleted unconditionally.
          */
         delete: operations["S3Controller_deleteFile"];
         options?: never;
@@ -1271,6 +1520,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ingredients/substitutions/{id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report a substitution hint as wrong
+         * @description Records one thumbs-down from the calling user for the substitution edge `id` (the `substitutionId` returned with recipe match state / recipe substitutions). Enough distinct reports disable the hint for everyone.
+         */
+        post: operations["IngredientSubstitutionController_report"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/metrics": {
         parameters: {
             query?: never;
@@ -1291,6 +1560,14 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        RecipePlanStatsDto: {
+            /** @description Recipe UUID the stats belong to */
+            recipeUuid: string;
+            /** @description How often the recipe was planned in the past */
+            timesPlanned: number;
+            /** @description Most recent past planned date (YYYY-MM-DD), null if never */
+            lastPlanned: string | null;
+        };
         OptionalRangeDto: {
             /**
              * @description Lower bound (inclusive)
@@ -1314,7 +1591,7 @@ export interface components {
              * @example AlphabeticalAsc
              * @enum {string}
              */
-            sortBy?: "AlphabeticalDesc" | "AlphabeticalAsc" | "TotalTime" | "Favorites" | "Random";
+            sortBy?: "AlphabeticalDesc" | "AlphabeticalAsc" | "TotalTime" | "Favorites" | "Random" | "Newest";
             /**
              * @description Search string (name, description, ingredients)
              * @example pancake
@@ -1330,9 +1607,20 @@ export interface components {
             /** @description Filter by favorite recipe UUIDs */
             favoriteReceipts?: string[];
             /** @description Filter by categories */
-            categories?: ("Breakfast" | "Lunch" | "Dinner" | "Snacks" | "Dessert" | "Salad" | "Shake" | "Soup" | "Smoothie" | "Appetizer" | "SideDish" | "Stew" | "Quick" | "ToGo" | "FewIngredients" | "Baking" | "Casserole" | "OvenDish" | "DoughDish" | "Easy" | "Basic" | "Vegetarian" | "Vegan" | "LowCarb" | "LowFat" | "LowCalorie" | "HighProtein" | "HighFiber" | "CleanEating" | "Keto" | "Pescatarian" | "SugarFree" | "GlutenFree" | "LactoseFree" | "Detox" | "Vegetables" | "Fruits" | "Meat" | "Fish" | "Poultry" | "Rice" | "Potatoes" | "Pasta" | "Sweet")[];
-            /** @description Filter by ingredient names */
+            categories?: ("Breakfast" | "Lunch" | "Dinner" | "Snacks" | "Dessert" | "Salad" | "Shake" | "Soup" | "Smoothie" | "Appetizer" | "SideDish" | "Stew" | "Quick" | "ToGo" | "FewIngredients" | "Baking" | "Casserole" | "OvenDish" | "DoughDish" | "Easy" | "Basic" | "Vegetarian" | "Vegan" | "LowCarb" | "LowFat" | "LowCalorie" | "HighProtein" | "HighFiber" | "CleanEating" | "Keto" | "Pescatarian" | "SugarFree" | "GlutenFree" | "LactoseFree" | "Detox" | "Vegetables" | "Fruits" | "Meat" | "Fish" | "Poultry" | "Rice" | "Potatoes" | "Pasta" | "Sweet" | "German" | "Italian" | "Asian" | "Mexican" | "Indian" | "Mediterranean" | "Oriental" | "Advanced")[];
+            /**
+             * @deprecated
+             * @description Legacy: the pantry as ingredient names. Use `pantryFilter` (plus `listIds`) instead, which reads the pantry server-side with its already-resolved ingredient ids. Every name sent here is resolved per request, and the resolver ends in a language model, so a pantry of a thousand items costs a thousand resolves on every call. Still honoured for app versions in the field and for local-only users, who have no server-side pantry. When set, it wins over `pantryFilter`.
+             */
             ingredients?: string[];
+            /**
+             * @description Opt-in to server-side pantry matching. Setting this field tells the server to hydrate the authenticated user's pantry items (across all of their lists) and score recipes against them — the app does not need to ship a 50–200 item array on every request. `all` uses every pantry item the user currently has. `expiring` keeps only items whose earliest best-before date is at most 14 days away (already expired or close to it), so the match prioritises ingredients the user should use up next. Mutually exclusive with `ingredients` — an explicit ingredients array always wins, and this field is ignored when no user is attached.
+             * @example all
+             * @enum {string}
+             */
+            pantryFilter?: "all" | "expiring";
+            /** @description Restrict the `pantryFilter` hydration to a subset of the user's lists. When the app is showing a single household list, send `[currentListId]` so "fitting recipes" / "use-up-soon" only consider that household's pantry; in all-lists mode send every list id (or omit to fall back to all). Ignored when `pantryFilter` is unset or no user is attached. Ids the caller does not own are silently dropped server-side. */
+            listIds?: string[];
             /** @description Filter by author UUID(s) */
             authorUuid?: string | string[];
             /** @description Favorites count range */
@@ -1343,12 +1631,36 @@ export interface components {
             preparationTimeRange?: components["schemas"]["OptionalRangeDto"];
             /** @description Filter by assigned collection */
             collectionId?: string;
+            /** @description Only recipes that match EVERY selected dietary style (AND). Dietary styles are a subset of the recipe categories (e.g. Vegan, Vegetarian, Keto, GlutenFree, HighProtein). The user setting "vegan + high protein" should surface vegan recipes that are also high-protein — a match-any filter here would leak non-vegan recipes whenever any other style happened to match. */
+            dietaryStyles?: ("Breakfast" | "Lunch" | "Dinner" | "Snacks" | "Dessert" | "Salad" | "Shake" | "Soup" | "Smoothie" | "Appetizer" | "SideDish" | "Stew" | "Quick" | "ToGo" | "FewIngredients" | "Baking" | "Casserole" | "OvenDish" | "DoughDish" | "Easy" | "Basic" | "Vegetarian" | "Vegan" | "LowCarb" | "LowFat" | "LowCalorie" | "HighProtein" | "HighFiber" | "CleanEating" | "Keto" | "Pescatarian" | "SugarFree" | "GlutenFree" | "LactoseFree" | "Detox" | "Vegetables" | "Fruits" | "Meat" | "Fish" | "Poultry" | "Rice" | "Potatoes" | "Pasta" | "Sweet" | "German" | "Italian" | "Asian" | "Mexican" | "Indian" | "Mediterranean" | "Oriental" | "Advanced")[];
+            /** @description Exclude recipes that contain ANY of these allergens. Recipes whose allergens are unknown (null) are NOT excluded. */
+            excludeAllergens?: ("Gluten" | "Crustaceans" | "Eggs" | "Fish" | "Peanuts" | "Soybeans" | "Milk" | "Nuts" | "Celery" | "Mustard" | "Sesame" | "SulphurDioxide" | "Lupin" | "Molluscs")[];
+            /** @description Leave out recipes whose categories say they are not a meal of their own (dessert, breakfast, snack, drink, side, …), unless they also carry a meal category (lunch, dinner, soup, …). A recipe without categories is kept. */
+            mainCoursesOnly?: boolean;
         };
         /**
          * @description Recipe categories
          * @enum {string}
          */
-        ReceiptCategory: "Breakfast" | "Lunch" | "Dinner" | "Snacks" | "Dessert" | "Salad" | "Shake" | "Soup" | "Smoothie" | "Appetizer" | "SideDish" | "Stew" | "Quick" | "ToGo" | "FewIngredients" | "Baking" | "Casserole" | "OvenDish" | "DoughDish" | "Easy" | "Basic" | "Vegetarian" | "Vegan" | "LowCarb" | "LowFat" | "LowCalorie" | "HighProtein" | "HighFiber" | "CleanEating" | "Keto" | "Pescatarian" | "SugarFree" | "GlutenFree" | "LactoseFree" | "Detox" | "Vegetables" | "Fruits" | "Meat" | "Fish" | "Poultry" | "Rice" | "Potatoes" | "Pasta" | "Sweet";
+        ReceiptCategory: "Breakfast" | "Lunch" | "Dinner" | "Snacks" | "Dessert" | "Salad" | "Shake" | "Soup" | "Smoothie" | "Appetizer" | "SideDish" | "Stew" | "Quick" | "ToGo" | "FewIngredients" | "Baking" | "Casserole" | "OvenDish" | "DoughDish" | "Easy" | "Basic" | "Vegetarian" | "Vegan" | "LowCarb" | "LowFat" | "LowCalorie" | "HighProtein" | "HighFiber" | "CleanEating" | "Keto" | "Pescatarian" | "SugarFree" | "GlutenFree" | "LactoseFree" | "Detox" | "Vegetables" | "Fruits" | "Meat" | "Fish" | "Poultry" | "Rice" | "Potatoes" | "Pasta" | "Sweet" | "German" | "Italian" | "Asian" | "Mexican" | "Indian" | "Mediterranean" | "Oriental" | "Advanced";
+        /**
+         * @description Allergens contained in the recipe (EU 14). Extracted by the recipe parser and/or derived from ingredients on save; clients should treat this as best-effort guidance, not a legal declaration.
+         * @enum {string}
+         */
+        Allergen: "Gluten" | "Crustaceans" | "Eggs" | "Fish" | "Peanuts" | "Soybeans" | "Milk" | "Nuts" | "Celery" | "Mustard" | "Sesame" | "SulphurDioxide" | "Lupin" | "Molluscs";
+        MetricEquivalentDto: {
+            /**
+             * @description The ingredient's whole amount expressed in the metric unit below
+             * @example 250
+             */
+            amount: number;
+            /**
+             * @description Metric base unit: `g` for solids, `ml` for liquids
+             * @example g
+             * @enum {string}
+             */
+            unit: "g" | "ml";
+        };
         IngredientDto: {
             /**
              * @description Ingredient name
@@ -1365,9 +1677,15 @@ export interface components {
              * @example g
              * @enum {string}
              */
-            volumeUnit: "pieces" | "packet" | "g" | "kg" | "l" | "ml" | "tbsp" | "tsp" | "lbs" | "qt" | "oz" | "fl-oz" | "gal" | "Pinch";
+            volumeUnit: "pieces" | "packet" | "g" | "kg" | "l" | "ml" | "cup" | "tbsp" | "tsp" | "lbs" | "qt" | "oz" | "fl-oz" | "gal" | "Pinch";
+            /** @description Density-aware metric restatement of this amount, supplied by the importer for `cup` measurements only, since every other unit converts by formula. Describes the whole amount, not one cup. Absent on manually created and on older recipes. */
+            metricEquivalent?: components["schemas"]["MetricEquivalentDto"];
             /** @description Optional notes about the ingredient */
             notes?: string;
+            /** @description Server-derived, normalised core noun of the ingredient (language-aware: quantities, units and descriptors stripped, singularised). Used for stable pantry↔recipe matching and de-duplication; clients should treat it as read-only. */
+            readonly normalizedName?: string;
+            /** @description Server-derived canonical ingredient id: the resolved entry of the shared ingredient catalog. Used for stable, language-independent pantry↔recipe matching. Null when the ingredient could not be resolved (then matching falls back to normalizedName). Read-only for clients. */
+            readonly ingredientId?: string;
             /** @description Reference to a partial step UUID */
             partialStepUid?: string;
         };
@@ -1381,6 +1699,11 @@ export interface components {
             ingredients: components["schemas"]["IngredientDto"][];
             /** @description Optional reference to a partial step */
             partialStepUid?: string;
+            /**
+             * @description Optional explicit timer duration for this step, in minutes. Set by the recipe author (or extracted from the step text) and used to pre-fill the cooking-mode timer instead of relying on text parsing.
+             * @example 5
+             */
+            timerMinutes?: number;
         };
         PartialStepDto: {
             /** @description Unique identifier of the partial step */
@@ -1430,6 +1753,56 @@ export interface components {
              */
             nutriScore?: components["schemas"]["NutriScore"];
         };
+        SubstitutionSuggestionDto: {
+            /**
+             * @description The recipe ingredient name that is missing but substitutable
+             * @example Butter
+             */
+            ingredient: string;
+            /**
+             * @description The pantry ingredient the user can use instead (localised display name)
+             * @example Margarine
+             */
+            substituteWith: string;
+            /** @description Optional hint for the swap, e.g. "use 80% of the amount" */
+            note?: string;
+            /**
+             * @description How well the substitute stands in for the original
+             * @example good
+             * @enum {string}
+             */
+            confidence: "perfect" | "good" | "emergency";
+            /**
+             * @description Why the pantry item can stand in: `variant` — the pantry holds a more generic kind of the requested ingredient (Tomaten for Kirschtomaten); `substitute` — a curated substitution edge.
+             * @enum {string}
+             */
+            kind?: "variant" | "substitute";
+        };
+        /** @enum {string} */
+        RecipeOrigin: "user_created" | "web_import" | "social_import" | "offers" | "community";
+        /** @enum {string} */
+        AiRole: "none" | "extracted" | "generated";
+        /**
+         * @description Set for social imports, drives the platform icon.
+         * @enum {string}
+         */
+        SocialPlatform: "instagram" | "tiktok" | "youtube" | "pinterest" | "facebook" | "other";
+        RecipeSourceDto: {
+            origin: components["schemas"]["RecipeOrigin"];
+            aiRole: components["schemas"]["AiRole"];
+            /** @description Set for social imports, drives the platform icon. */
+            platform?: components["schemas"]["SocialPlatform"];
+            /** @description Channel or author handle, e.g. "@veganevibes". */
+            channelName?: string;
+            /** @description Link to the original post or page. */
+            originalUrl?: string;
+            /** @description Site name for web imports, e.g. "chefkoch.de". */
+            siteName?: string;
+            /** @description When the content was generated (ISO timestamp). Only set for aiRole=generated. Offer prices age, so the app shows this next to them. */
+            aiGeneratedAt?: string;
+            /** @description True once the user edited a recipe whose content a model produced. The AI badge stays either way, it only changes wording. */
+            userModified: boolean;
+        };
         RecipeDto: {
             /**
              * @description Unique recipe identifier (UUID)
@@ -1443,8 +1816,8 @@ export interface components {
              * @example Banana Pancakes
              */
             name: string;
-            /** @description Number of times this recipe was favorited */
-            favorites: number;
+            /** @description Number of times this recipe was favorited. Read-only — any value sent on create/update is ignored; it is computed from likes. */
+            favorites?: number;
             /** @description Detailed recipe description */
             description?: string;
             /** @description Total time in minutes */
@@ -1462,10 +1835,12 @@ export interface components {
              * @example Portion
              */
             servingsUnit: string;
-            /** @description Whether the recipe is publicly visible */
+            /** @description Whether the recipe is publicly visible inside the app. Imports are kept out of the sitemap and carry robots: noindex regardless, so this never exposes somebody else's post to a search engine. */
             shouldBePublic: boolean;
             /** @description Recipe categories */
             categories: components["schemas"]["ReceiptCategory"][];
+            /** @description Allergens contained in the recipe (EU 14). Extracted by the recipe parser and/or derived from ingredients on save; clients should treat this as best-effort guidance, not a legal declaration. */
+            allergens?: components["schemas"]["Allergen"][];
             /**
              * @description Recipe language (IETF locale)
              * @example en-US
@@ -1496,6 +1871,179 @@ export interface components {
             ingredientCount?: number;
             /** @description Number of ingredients in the recipe that match to the stock. Only set when requesting recipe pagination with current stock */
             matchingIngredientCount?: number;
+            /** @description Names of the recipe ingredients that are NOT covered by the current stock (pantry staples such as salt, oil or water are excluded and always treated as available). Only set when filtering by ingredients. */
+            missingIngredients?: string[];
+            /** @description Number of missing ingredients the user could substitute from their pantry. Counted separately from matches — show as a softer "can substitute" state, not as "have it". Only set when filtering by ingredients and a substitution applies. */
+            substitutableCount?: number;
+            /** @description Names of the recipe ingredients that are not in stock but covered by a curated substitution from the pantry. These are excluded from missingIngredients. Only set when filtering by ingredients. */
+            substitutableIngredients?: string[];
+            /** @description Concrete "use X instead of Y" suggestions for the substitutable ingredients. Only set when filtering by ingredients and a substitution applies. */
+            substitutions?: components["schemas"]["SubstitutionSuggestionDto"][];
+            /** @description Where this recipe came from and how much of it a model wrote. Present on every recipe response, no separate call needed. Read-only: the server derives the whole block from the recipe itself and ignores whatever the client sends for it. */
+            source?: components["schemas"]["RecipeSourceDto"];
+        };
+        RecipeMatchStateRequestDto: {
+            /**
+             * @description Recipe UUIDs to score against the authenticated user pantry
+             * @example [
+             *       "7c1bd6e3-…",
+             *       "b48a01ff-…"
+             *     ]
+             */
+            uuids: string[];
+            /** @description Scope the pantry the recipes are scored against to a subset of the user's lists. Used together with the `listIds` field on `ApiFilterDto` so the match badges on the home page line up with the same list the filter is using. Ids the caller does not own are silently dropped. */
+            listIds?: string[];
+            /** @description Pantry item names to score against, for callers with no account. A signed-in caller leaves this unset and the server hydrates their pantry from their own lists, which is authoritative and cheaper. A local-only user has no lists to hydrate from, so the app ships the names it holds on the device instead. Same precedence as on `ApiFilterDto`: an explicit array wins, and the server-side hydration is skipped. Staples are matched from the recipe side (`recipe_ingredient.is_staple`) either way, so they do not need to be listed here. */
+            ingredients?: string[];
+        };
+        RecipeMatchedIngredientDto: {
+            /** @description Recipe ingredient display name (from the recipe). */
+            recipeIngredientName: string;
+            /** @description UUID of the pantry list item that satisfied the ingredient. */
+            pantryItemId: string;
+            /** @description Name of the pantry list item. */
+            pantryItemName: string;
+            /** @description List the pantry item belongs to. Useful for deep-link routing when the app shows multiple households and needs to know which list to open. */
+            listId: string;
+        };
+        RecipeSubstitutableIngredientDto: {
+            /** @description Recipe ingredient display name (from the recipe). */
+            recipeIngredientName: string;
+            /** @description UUID of the pantry list item the user can substitute with. */
+            pantryItemId: string;
+            /** @description Name of the pantry list item (e.g. "Margarine"). */
+            pantryItemName: string;
+            /** @description List the substitute pantry item belongs to (deep-link routing). */
+            listId: string;
+            /**
+             * @description How well the substitute covers the target: `perfect` (1:1, indistinguishable), `good` (clear shift but same role), `emergency` (last-resort).
+             * @enum {string}
+             */
+            confidence: "perfect" | "good" | "emergency";
+            /** @description Optional localised hint resolved to the caller language with en-US fallback ("1:1 swap", "Vegane Variante, 1:1 ersetzbar"). Missing when the curated row had no note for any locale. */
+            note?: string;
+            /**
+             * @description Why the pantry item can stand in: `variant` — the pantry holds a more generic kind of the requested ingredient (Tomaten for Kirschtomaten); `substitute` — a curated substitution edge. Older API builds omit it (treat as `substitute`).
+             * @enum {string}
+             */
+            kind?: "variant" | "substitute";
+        };
+        RecipeMatchStateDto: {
+            /** @description Recipe UUID */
+            uuid: string;
+            /** @description Count of ingredients that are either in the pantry or count as staples (always-available) for the recipe language. */
+            matchingCount: number;
+            /** @description Total ingredient count of the recipe */
+            ingredientCount: number;
+            /** @description Names of ingredients not covered by the pantry (excl. staples) */
+            missingIngredients?: string[];
+            /** @description Per-ingredient pantry-side detail for the ingredients the recipe matched. Lets the app render "Butter — durch deine Margarine ersetzt" with a deep link to the pantry item instead of inferring the mapping by name client-side. Staples are not included (they always count as available but aren't tied to a specific pantry item). */
+            matchedIngredients?: components["schemas"]["RecipeMatchedIngredientDto"][];
+            /** @description Display names of recipe ingredients flagged as staples for the recipe language (salt, water, oil, …). Staples count toward `matchingCount` because they're assumed always-available, but they don't link to a specific pantry item. The app uses this list to render "Du hast das wahrscheinlich zuhause" instead of the regular "Du hast X im Vorrat" line. */
+            stapleIngredients?: string[];
+            /** @description Recipe ingredients the user can cover via a curated substitution (Stufe 2c) — Margarine for Butter, Honey for Maple syrup, etc. Entries move out of `missingIngredients` so the app can render them in a distinct "can substitute" bucket (yellow) rather than as plain misses (red). `matchingCount` stays honest: substitutables do NOT count as direct matches — they're a weaker signal. */
+            substitutableIngredients?: components["schemas"]["RecipeSubstitutableIngredientDto"][];
+            /**
+             * @description Grams per millilitre for the recipe ingredients whose catalog entry has been measured, keyed by display name. Lets the app weigh a recipe's spoon against a pantry item kept by the gram: one tablespoon is 15 ml, so 15 ml of paprika powder at 0.45 is about 7 g. Only the ingredients with a known density appear; for the rest the app keeps its old behaviour and treats a stocked pantry item as covering the ingredient without deducting from it.
+             * @example {
+             *       "Paprikapulver": 0.45,
+             *       "Olivenöl": 0.91
+             *     }
+             */
+            ingredientDensities?: {
+                [key: string]: number;
+            };
+        };
+        RecipeDeckRequestDto: {
+            /**
+             * @description Current page (1-based)
+             * @example 1
+             */
+            currentPage?: number;
+            /**
+             * @description Sort order
+             * @example AlphabeticalAsc
+             * @enum {string}
+             */
+            sortBy?: "AlphabeticalDesc" | "AlphabeticalAsc" | "TotalTime" | "Favorites" | "Random" | "Newest";
+            /**
+             * @description Search string (name, description, ingredients)
+             * @example pancake
+             */
+            searchString?: string;
+            /** @description Only public recipes */
+            shouldBePublic?: boolean;
+            /**
+             * @example en-US
+             * @enum {string}
+             */
+            language?: "de-DE" | "en-US" | "en-GB" | "pl-PL" | "sv-SE" | "nl-NL" | "pt-PT" | "pt-BR" | "it-IT" | "es-ES";
+            /** @description Filter by favorite recipe UUIDs */
+            favoriteReceipts?: string[];
+            /** @description Filter by categories */
+            categories?: ("Breakfast" | "Lunch" | "Dinner" | "Snacks" | "Dessert" | "Salad" | "Shake" | "Soup" | "Smoothie" | "Appetizer" | "SideDish" | "Stew" | "Quick" | "ToGo" | "FewIngredients" | "Baking" | "Casserole" | "OvenDish" | "DoughDish" | "Easy" | "Basic" | "Vegetarian" | "Vegan" | "LowCarb" | "LowFat" | "LowCalorie" | "HighProtein" | "HighFiber" | "CleanEating" | "Keto" | "Pescatarian" | "SugarFree" | "GlutenFree" | "LactoseFree" | "Detox" | "Vegetables" | "Fruits" | "Meat" | "Fish" | "Poultry" | "Rice" | "Potatoes" | "Pasta" | "Sweet" | "German" | "Italian" | "Asian" | "Mexican" | "Indian" | "Mediterranean" | "Oriental" | "Advanced")[];
+            /**
+             * @deprecated
+             * @description Legacy: the pantry as ingredient names. Use `pantryFilter` (plus `listIds`) instead, which reads the pantry server-side with its already-resolved ingredient ids. Every name sent here is resolved per request, and the resolver ends in a language model, so a pantry of a thousand items costs a thousand resolves on every call. Still honoured for app versions in the field and for local-only users, who have no server-side pantry. When set, it wins over `pantryFilter`.
+             */
+            ingredients?: string[];
+            /**
+             * @description Opt-in to server-side pantry matching. Setting this field tells the server to hydrate the authenticated user's pantry items (across all of their lists) and score recipes against them — the app does not need to ship a 50–200 item array on every request. `all` uses every pantry item the user currently has. `expiring` keeps only items whose earliest best-before date is at most 14 days away (already expired or close to it), so the match prioritises ingredients the user should use up next. Mutually exclusive with `ingredients` — an explicit ingredients array always wins, and this field is ignored when no user is attached.
+             * @example all
+             * @enum {string}
+             */
+            pantryFilter?: "all" | "expiring";
+            /** @description Restrict the `pantryFilter` hydration to a subset of the user's lists. When the app is showing a single household list, send `[currentListId]` so "fitting recipes" / "use-up-soon" only consider that household's pantry; in all-lists mode send every list id (or omit to fall back to all). Ignored when `pantryFilter` is unset or no user is attached. Ids the caller does not own are silently dropped server-side. */
+            listIds?: string[];
+            /** @description Filter by author UUID(s) */
+            authorUuid?: string | string[];
+            /** @description Favorites count range */
+            favoritesRange?: components["schemas"]["OptionalRangeDto"];
+            /** @description Total time range in minutes */
+            totalTimeRange?: components["schemas"]["OptionalRangeDto"];
+            /** @description Preparation time range in minutes */
+            preparationTimeRange?: components["schemas"]["OptionalRangeDto"];
+            /** @description Filter by assigned collection */
+            collectionId?: string;
+            /** @description Only recipes that match EVERY selected dietary style (AND). Dietary styles are a subset of the recipe categories (e.g. Vegan, Vegetarian, Keto, GlutenFree, HighProtein). The user setting "vegan + high protein" should surface vegan recipes that are also high-protein — a match-any filter here would leak non-vegan recipes whenever any other style happened to match. */
+            dietaryStyles?: ("Breakfast" | "Lunch" | "Dinner" | "Snacks" | "Dessert" | "Salad" | "Shake" | "Soup" | "Smoothie" | "Appetizer" | "SideDish" | "Stew" | "Quick" | "ToGo" | "FewIngredients" | "Baking" | "Casserole" | "OvenDish" | "DoughDish" | "Easy" | "Basic" | "Vegetarian" | "Vegan" | "LowCarb" | "LowFat" | "LowCalorie" | "HighProtein" | "HighFiber" | "CleanEating" | "Keto" | "Pescatarian" | "SugarFree" | "GlutenFree" | "LactoseFree" | "Detox" | "Vegetables" | "Fruits" | "Meat" | "Fish" | "Poultry" | "Rice" | "Potatoes" | "Pasta" | "Sweet" | "German" | "Italian" | "Asian" | "Mexican" | "Indian" | "Mediterranean" | "Oriental" | "Advanced")[];
+            /** @description Exclude recipes that contain ANY of these allergens. Recipes whose allergens are unknown (null) are NOT excluded. */
+            excludeAllergens?: ("Gluten" | "Crustaceans" | "Eggs" | "Fish" | "Peanuts" | "Soybeans" | "Milk" | "Nuts" | "Celery" | "Mustard" | "Sesame" | "SulphurDioxide" | "Lupin" | "Molluscs")[];
+            /** @description Leave out recipes whose categories say they are not a meal of their own (dessert, breakfast, snack, drink, side, …), unless they also carry a meal category (lunch, dinner, soup, …). A recipe without categories is kept. */
+            mainCoursesOnly?: boolean;
+            /**
+             * @description Number of cards to return in the deck (1–50, default 15).
+             * @example 15
+             */
+            deckSize?: number;
+        };
+        SwipeWeekPlanTargetDto: {
+            /** @description List (household) to plan into */
+            listId: string;
+            /**
+             * @description Day to plan on (YYYY-MM-DD)
+             * @example 2026-06-10
+             */
+            date: string;
+        };
+        SwipeDecisionDto: {
+            /** @description UUID of the swiped recipe */
+            recipeUuid: string;
+            /**
+             * @description 'like' (swipe right) or 'skip' (swipe left)
+             * @enum {string}
+             */
+            decision: "like" | "skip";
+            /** @description When liking, optionally plan the recipe straight into a week-plan day. Ignored for skips. */
+            weekPlan?: components["schemas"]["SwipeWeekPlanTargetDto"];
+        };
+        MessageDto: {
+            from: string;
+            subject: string;
+            message: string;
+            language: string;
+            sendNoResponse: boolean;
+            cloudflareToken: string;
         };
         /** @enum {string} */
         HistoryItemType: "shopping" | "pantry" | "intermediate";
@@ -1504,6 +2052,8 @@ export interface components {
         PublicUserDto: {
             uid: string;
             displayName: string;
+            /** @description Public profile picture key/URL. Safe to expose so members of a shared list can render each other’s avatars. */
+            profileImage?: string;
             /** @enum {string} */
             forcedPremiumTariff?: "single" | "twoUsers" | "fiveUsers";
         };
@@ -1531,6 +2081,31 @@ export interface components {
             earliestBestBefore?: string;
             articleList: components["schemas"]["PantrySettingsDto"][];
             savedForRecipe?: components["schemas"]["SavedForRecipeDto"][];
+        };
+        HouseholdDetailsDto: {
+            manufacturer?: string | null;
+            modelNumber?: string | null;
+            serialNumber?: string | null;
+            /**
+             * Format: date
+             * @description Last day of the warranty, YYYY-MM-DD.
+             */
+            warrantyExpiration?: string | null;
+            /** @description Link to the manual or product page. */
+            manualUrl?: string | null;
+            /** @description Where the item was bought (shop, website). */
+            purchaseSource?: string | null;
+        };
+        /**
+         * @description The unit the scale shows, used for `tare` and for input.
+         * @enum {string}
+         */
+        WeighingUnit: "g" | "kg" | "oz" | "lbs";
+        WeighingDto: {
+            /** @description Weight of the empty container, in `unit`. */
+            tare?: number | null;
+            /** @description The unit the scale shows, used for `tare` and for input. */
+            unit: components["schemas"]["WeighingUnit"];
         };
         ValueWithMetricDto: {
             value?: number;
@@ -1566,6 +2141,8 @@ export interface components {
             enabled: boolean;
             /** @description Required when `enabled` is true */
             schedule?: components["schemas"]["AutoReduceIntervalDto"] | components["schemas"]["AutoReduceWeekdayDto"];
+            /** @description ISO timestamp the user activated auto-reduce on this item. Stamped by the app on the false→true toggle and preserved across schedule edits. Accrual is clamped to `max(userCursor, activatedAt)` so a freshly-enabled item does not retroactively count consumption from before activation. */
+            activatedAt?: string;
         };
         ArticleDto: {
             uuid: string;
@@ -1582,6 +2159,10 @@ export interface components {
             minimumAmount: number;
             amountToBuy: number;
             disableMinAmount?: boolean | null;
+            /** @description Whether two entries of this article that differ only in contentVolume count as the same thing. null means the user has not been asked yet. */
+            mergeDifferentContent?: boolean | null;
+            /** @description Set by the server on the auto-managed placeholder row it keeps on the shopping list for a category with a configured minimum stock; holds that category's uuid. Null on every item a user created. Clients may render such a row as a category placeholder (e.g. with the translated category label) rather than a concrete article. Strictly read-only: the server keeps whatever is already stored and ignores the value a write supplies, so omitting it never clears the marker. */
+            readonly placeholderForCategoryUuid?: string | null;
             price?: number | null;
             priceType: components["schemas"]["PriceType"];
             deposit?: number | null;
@@ -1600,7 +2181,15 @@ export interface components {
             lastInventoryDate?: string | null;
             lastModified?: number | null;
             tags?: string[] | null;
+            /** @description Allergens (EU 14) this item contains. Auto-detected from the name on add and overridable by the client. Best-effort guidance, not a legal declaration. */
+            allergens?: components["schemas"]["Allergen"][] | null;
+            /** @description Server-derived canonical ingredient id, resolved from the name on add. Shares identity with recipe ingredients for matching and de-duplication. Read-only; null when unresolved. */
+            readonly ingredientId?: string | null;
             nutriments?: components["schemas"]["ArticleNutrimentsDto"] | null;
+            /** @description Manufacturer, model, serial number, warranty and the like, for items in a category with itemType 'non-food'. */
+            householdDetails?: components["schemas"]["HouseholdDetailsDto"] | null;
+            /** @description Set when the item is managed by weight: its stock is the fill level of one open package, read off a scale. Null for counted items. */
+            weighing?: components["schemas"]["WeighingDto"] | null;
             complexBestBeforeData?: components["schemas"]["ArticleCatalogBestBeforeDatesDto"] | null;
             genericPriceFromCatalog?: number | null;
             pricePerMarket?: {
@@ -1632,6 +2221,11 @@ export interface components {
             /** @description Cursor for the next page (pass as `cursor` query param). Null when there are no more entries. */
             nextCursor?: string | null;
         };
+        /**
+         * @description 'non-food' when the category is non-food in any of the lists merged into this entry; absent means food.
+         * @enum {string}
+         */
+        CategoryItemType: "food" | "non-food";
         MergedCategoryDto: {
             /** @description Either a plain string or a translation key object */
             name: string | {
@@ -1643,6 +2237,8 @@ export interface components {
                 [key: string]: string;
             };
             defaultBestBeforeDays?: number | null;
+            /** @description 'non-food' when the category is non-food in any of the lists merged into this entry; absent means food. */
+            itemType?: components["schemas"]["CategoryItemType"];
         };
         MergedSupermarketDto: {
             name: string;
@@ -1687,12 +2283,21 @@ export interface components {
             /** @description When true, items without explicit auto-reduce config but with high-confidence consumption history are auto-included in the cold-start accrual modal. */
             defaultAutoReduce?: boolean;
         };
+        DietaryPreferencesDto: {
+            /** @description Preferred dietary styles for this household (subset of recipe categories, e.g. Vegan, Vegetarian, Keto). Used as default OR filter. */
+            dietaryStyles?: ("Breakfast" | "Lunch" | "Dinner" | "Snacks" | "Dessert" | "Salad" | "Shake" | "Soup" | "Smoothie" | "Appetizer" | "SideDish" | "Stew" | "Quick" | "ToGo" | "FewIngredients" | "Baking" | "Casserole" | "OvenDish" | "DoughDish" | "Easy" | "Basic" | "Vegetarian" | "Vegan" | "LowCarb" | "LowFat" | "LowCalorie" | "HighProtein" | "HighFiber" | "CleanEating" | "Keto" | "Pescatarian" | "SugarFree" | "GlutenFree" | "LactoseFree" | "Detox" | "Vegetables" | "Fruits" | "Meat" | "Fish" | "Poultry" | "Rice" | "Potatoes" | "Pasta" | "Sweet" | "German" | "Italian" | "Asian" | "Mexican" | "Indian" | "Mediterranean" | "Oriental" | "Advanced")[];
+            /** @description Allergens this household wants to avoid. Used to warn on items and to exclude recipes containing these allergens. */
+            allergens?: ("Gluten" | "Crustaceans" | "Eggs" | "Fish" | "Peanuts" | "Soybeans" | "Milk" | "Nuts" | "Celery" | "Mustard" | "Sesame" | "SulphurDioxide" | "Lupin" | "Molluscs")[];
+        };
         BlockSettingsDto: {
             name: string;
             enablePantry: boolean;
             shoppingList: components["schemas"]["ShoppingListSettingsDto"];
             customCurrency?: string;
             smartSuggestions?: components["schemas"]["SmartSuggestionsSettingsDto"];
+            dietaryPreferences?: components["schemas"]["DietaryPreferencesDto"];
+            /** @description When true, auto-restock discounts partially consumed open packages from the available amount (mirrors the app pantry setting). Defaults to true when unset. */
+            allowToOpenArticles?: boolean;
         };
         ListUserDto: {
             /** @description User UID */
@@ -1754,6 +2359,8 @@ export interface components {
             role: components["schemas"]["Role"];
             /** @description How many minutes the invite stays valid for. Defaults to 60. */
             ttlMinutes?: number;
+            /** @description Pantrist user to send the invite to as a push notification, for inviting someone by e-mail address. Without it the invite is only a share link. */
+            recipientUid?: string;
         };
         ListInviteDto: {
             /** @description Opaque token embedded in the share link */
@@ -1795,6 +2402,8 @@ export interface components {
             barcode?: string[] | null;
             supermarketId?: string[] | null;
             tags?: string[] | null;
+            /** @description Allergens (EU 14) this catalog item carries. Propagated onto created articles as best-effort defaults. */
+            allergens?: components["schemas"]["Allergen"][] | null;
             favourite?: boolean | null;
             deposit?: number | null;
             imageUrl?: string | null;
@@ -1804,6 +2413,8 @@ export interface components {
             notes?: string | null;
             defaultBestBeforeDays?: number | null;
             manageMinimumAmount?: boolean | null;
+            /** @description Whether two entries of this product that differ only in contentVolume count as the same thing. null means the user has not been asked yet. */
+            mergeDifferentContent?: boolean | null;
             minimumAmount?: number | null;
             amountToBuy?: number | null;
             price?: components["schemas"]["PriceWithDateDto"] | null;
@@ -1812,6 +2423,77 @@ export interface components {
             } | null;
             nutriments?: components["schemas"]["ArticleNutrimentsDto"] | null;
             complexBestBeforeData?: components["schemas"]["ArticleCatalogBestBeforeDatesDto"] | null;
+        };
+        ArticleCatalogOverlayRowDto: {
+            uuid: string;
+            name: string;
+            brand?: string | null;
+            categoryUuid: string;
+            contentVolume: number;
+            unitId?: string | null;
+            barcode?: string[] | null;
+            supermarketId?: string[] | null;
+            tags?: string[] | null;
+            /** @description Allergens (EU 14) this catalog item carries. Propagated onto created articles as best-effort defaults. */
+            allergens?: components["schemas"]["Allergen"][] | null;
+            favourite?: boolean | null;
+            deposit?: number | null;
+            imageUrl?: string | null;
+            /** @description Additional product photo URLs, ordered. imageUrl is the primary photo. */
+            additionalImageUrls?: string[] | null;
+            predefinedPantry?: string | null;
+            notes?: string | null;
+            defaultBestBeforeDays?: number | null;
+            manageMinimumAmount?: boolean | null;
+            /** @description Whether two entries of this product that differ only in contentVolume count as the same thing. null means the user has not been asked yet. */
+            mergeDifferentContent?: boolean | null;
+            minimumAmount?: number | null;
+            amountToBuy?: number | null;
+            price?: components["schemas"]["PriceWithDateDto"] | null;
+            pricePerMarket?: {
+                [key: string]: components["schemas"]["PriceWithDateDto"];
+            } | null;
+            nutriments?: components["schemas"]["ArticleNutrimentsDto"] | null;
+            complexBestBeforeData?: components["schemas"]["ArticleCatalogBestBeforeDatesDto"] | null;
+            /** @description Tombstone: the seed item with this `seed:` uuid is removed from the list. Only `seed:` uuids may carry it. */
+            deleted?: boolean;
+        };
+        ArticleCatalogOverlayDto: {
+            /** @description Language of the default catalog the rows overlay (e.g. `de-DE`); null for a legacy list, whose rows are the whole catalog. */
+            seedLang: string | null;
+            rows: components["schemas"]["ArticleCatalogOverlayRowDto"][];
+        };
+        AisleOrderMarketsDto: {
+            /** @description Markets whose aisle order is learned with 'high' confidence. Open to every account, so the app can point free users at the feature; the order itself stays premium. */
+            marketIds: string[];
+        };
+        AisleRankDto: {
+            /** @description Category uuid, or a product key: `ing:<ingredientId>` when the purchase carried an ingredient, else the purchase product key (`bc:<first barcode>` or `nb:<lowercased trimmed name>|<lowercased trimmed brand>`). */
+            key: string;
+            /** @description Median relative position of the first check-off within a trip, 0 = first, 1 = last. Categories and products share the scale. */
+            rank: number;
+            /** @description Products only: the name it was last bought under in that market, for showing which articles the order covers. */
+            name?: string;
+            /** @description Products only: the category uuid it was last bought in there. */
+            category?: string;
+        };
+        AisleOrderDto: {
+            marketId: string;
+            /**
+             * @description 'high' from 3 trips and 5 distinct categories on; clients should keep their manual order while it is 'low'.
+             * @enum {string}
+             */
+            confidence: "high" | "low";
+            /** @description Trips the order was learned from. */
+            trips: number;
+            /** @description Categories, earliest in the market first. */
+            categories: components["schemas"]["AisleRankDto"][];
+            /** @description Products, earliest in the market first. */
+            products: components["schemas"]["AisleRankDto"][];
+        };
+        AisleOrdersDto: {
+            /** @description One entry per market with timed purchases. */
+            markets: components["schemas"]["AisleOrderDto"][];
         };
         PurchasedItemDto: {
             /** @description Row primary key in purchase table — used for DELETE */
@@ -1827,6 +2509,13 @@ export interface components {
             unitId: string;
             /** @description ISO date string */
             purchaseDate: string;
+            /**
+             * Format: date-time
+             * @description ISO timestamp of the check-off. Orders the purchases within one shopping trip; the server sets it when a new purchase arrives without one.
+             */
+            purchasedAt?: string;
+            /** @description Canonical ingredient id of the checked-off list item (ArticleDto.ingredientId). Identifies the product for the learned aisle order. */
+            ingredientId?: string | null;
             price?: number;
             deposit?: number;
             /** @enum {string} */
@@ -1836,6 +2525,21 @@ export interface components {
             discountType: "none" | "currency" | "percent";
             couponName?: string;
             couponExpirationDate?: string;
+        };
+        PurchasePageDto: {
+            items: components["schemas"]["PurchasedItemDto"][];
+            /** @description Pass as `before` to get the next, older page. Absent on the last page. */
+            nextCursor?: string;
+        };
+        PriceTrendPointDto: {
+            /** @description Purchase date (ISO string). */
+            date: string;
+            /** @description Price of one unit (package) of the purchase. */
+            unitPrice: number;
+            /** @description Unit price divided by the content volume, when known. */
+            pricePerContent?: number;
+            contentVolume: number;
+            unitId: string;
         };
         PriceTrendItemDto: {
             /** @description Stable identity. "bc:<barcode>" when a barcode exists, otherwise "nb:<name>|<brand>" (both normalized to lower-case + trimmed). */
@@ -1856,6 +2560,10 @@ export interface components {
             marketUids: string[];
             /** @description True if at least one content-volume change has been detected for this product. */
             hasContentChange: boolean;
+            /** @description The last purchases with a price (at most 8), oldest first: enough for a sparkline. */
+            recentPrices: components["schemas"]["PriceTrendPointDto"][];
+            /** @description The first purchase with a price, to measure the change since. Absent without one. */
+            firstPrice?: components["schemas"]["PriceTrendPointDto"];
         };
         PriceTrendsPageDto: {
             items: components["schemas"]["PriceTrendItemDto"][];
@@ -1898,8 +2606,26 @@ export interface components {
                 translationKey: string;
             };
             color?: string;
+            /** @description Absent means 'food'. 'non-food' items get household details (manufacturer, serial number, warranty) instead of nutrition facts. */
+            itemType?: components["schemas"]["CategoryItemType"];
             defaultBestBeforeDays?: number | null;
             complexBestBeforeData?: components["schemas"]["ArticleCatalogBestBeforeDatesDto"];
+            /** @description When true, this category takes part in the minimum-stock rule: the server keeps a placeholder item on the shopping list for as long as the pantry holds less of this category than `minimumStock`. Omitted or false means the category is not managed. */
+            manageMinimumStock?: boolean;
+            /** @description How much of this category the household wants to keep in the pantry, measured as the summed `amount` of its pantry items. Only applied while `manageMinimumStock` is true. */
+            minimumStock?: number | null;
+        };
+        LinkedStoreDto: {
+            id: string;
+            name: string;
+            retailerKey: string;
+            street?: string | null;
+            zip?: string | null;
+            city?: string | null;
+            /** @description Latitude of the branch (decimal degrees). Lets the app recognise the market by location without a captured geofence. */
+            lat?: number | null;
+            /** @description Longitude of the branch (decimal degrees). */
+            lng?: number | null;
         };
         SupermarketDto: {
             uid: string;
@@ -1907,6 +2633,22 @@ export interface components {
             iconId: string;
             categorySortOrder?: string[] | null;
             differentOrder?: boolean | null;
+            /** @description Chain identifier (e.g. "rewe") when a default-supermarket icon was picked, null for a custom market. */
+            retailerKey?: string | null;
+            /** @description The real branch (offers module store id) this market is, if the user linked one. Unlike retailerKey, identifies a specific location, not just the chain. */
+            storeId?: string | null;
+            /** @description Read-only display info for storeId, joined in so callers never need a second lookup. Absent when storeId is unset, or when the linked store could not be found (e.g. a stale id). */
+            linkedStore?: components["schemas"]["LinkedStoreDto"] | null;
+            /** @description Geofence centre latitude (decimal degrees) */
+            geofenceLat?: number | null;
+            /** @description Geofence centre longitude (decimal degrees) */
+            geofenceLng?: number | null;
+            /** @description Geofence radius in metres */
+            geofenceRadiusM?: number | null;
+            /** @description When the geofence was captured (ISO 8601) */
+            geofenceCapturedAt?: string | null;
+            /** @description Address of the geofence centre, shown to the user in place of coordinates. Display only: arrival is decided by the coordinates. */
+            geofenceAddress?: string | null;
         };
         /** @enum {string} */
         LocationType: "unrefrigerated" | "refrigerator" | "freezer";
@@ -1971,6 +2713,8 @@ export interface components {
         };
         AddByNameDto: {
             name: string;
+            /** @description Markets to buy the item at: `uid`s from GET /list/{listId}/supermarkets. Unknown ids are rejected with 400. */
+            supermarketIds?: string[];
         };
         AddByBarcodeDto: {
             barcode: string;
@@ -1981,7 +2725,7 @@ export interface components {
             count: number;
         };
         /** @enum {string} */
-        VolumeUnit: "pieces" | "packet" | "g" | "kg" | "l" | "ml" | "tbsp" | "tsp" | "lbs" | "qt" | "oz" | "fl-oz" | "gal";
+        VolumeUnit: "pieces" | "packet" | "g" | "kg" | "l" | "ml" | "cup" | "tbsp" | "tsp" | "lbs" | "qt" | "oz" | "fl-oz" | "gal";
         BarcodeAffiliateProductDto: {
             id: string;
             merchant: string;
@@ -2007,10 +2751,12 @@ export interface components {
             /** @description Additional product photo URLs, ordered. imageUrl is the primary photo. */
             additionalImageUrls?: string[] | null;
             tags?: string[];
+            /** @description Allergens (EU 14) detected in the product. Best-effort guidance, not a legal declaration. */
+            allergens?: components["schemas"]["Allergen"][] | null;
             nutriments?: components["schemas"]["ArticleNutrimentsDto"];
             complexBestBeforeData?: components["schemas"]["ArticleCatalogBestBeforeDatesDto"];
             offers: components["schemas"]["BarcodeAffiliateProductDto"][];
-            /** @description False when the page should render <meta name="robots" content="noindex">. Computed from name length, brand, category, image, and offer presence. */
+            /** @description False when the page should render <meta name="robots" content="noindex">. Computed from GTIN validity, name length, image presence, and at least two of: brand, category, nutriments, tags or allergens (offers do not count). */
             indexable: boolean;
         };
         SearchForBarcodeDto: {
@@ -2055,7 +2801,7 @@ export interface components {
             updatedAt: string;
             /** Format: date-time */
             createdAt: string;
-            /** @description False when the page should render <meta name="robots" content="noindex">. */
+            /** @description False when the page should render <meta name="robots" content="noindex">. Computed from GTIN validity, name length, image presence, and at least two of: brand, category, nutriments, tags or allergens (offers do not count). */
             indexable: boolean;
         };
         CreateBarcodeDto: {
@@ -2071,6 +2817,8 @@ export interface components {
             /** @description Additional product photo URLs, ordered. imageUrl is the primary photo. */
             additionalImageUrls?: string[] | null;
             tags?: string[];
+            /** @description Allergens (EU 14) detected in the product. Best-effort guidance, not a legal declaration. */
+            allergens?: components["schemas"]["Allergen"][] | null;
             nutriments?: components["schemas"]["ArticleNutrimentsDto"];
             complexBestBeforeData?: components["schemas"]["ArticleCatalogBestBeforeDatesDto"];
         };
@@ -2136,7 +2884,7 @@ export interface components {
              * @description Optional tag describing where the change originated. Written to `amount_change_log.source`. Defaults to `manual`.
              * @enum {string}
              */
-            source?: "manual" | "auto_reduce" | "restock" | "set_amount" | "barcode";
+            source?: "manual" | "auto_reduce" | "restock" | "set_amount" | "barcode" | "nfc" | "shortcut";
         };
         AddPantryByNameDto: {
             name: string;
@@ -2152,6 +2900,36 @@ export interface components {
             /** @default pieces */
             unitId: string;
         };
+        AutoReduceCursorDto: {
+            /** @description ISO timestamp the next accrual window starts from, shared by every member of the list. Null when the modal has never been presented for this list; the app then falls back to its per-user baseline. */
+            cursor: string | null;
+        };
+        BuyReminderLastPurchaseDto: {
+            name: string;
+            brand?: string | null;
+            /** @description Multi-barcode array (same shape as list_item.barcode). */
+            barcode?: string[] | null;
+            categoryUuid?: string | null;
+            unitId?: string | null;
+            contentVolume: number;
+            amount: number;
+            /** @description Supermarket IDs the item was bought at (array column). */
+            supermarketId?: string[] | null;
+            price?: number | null;
+            priceType?: string | null;
+        };
+        BuyReminderRowDto: {
+            identityKey: string;
+            displayName: string;
+            brand: string | null;
+            barcode: string | null;
+            lastPurchaseAt: string;
+            typicalIntervalDays: number;
+            daysSinceLastPurchase: number;
+            /** @enum {string} */
+            confidence: "high" | "low";
+            lastPurchase: components["schemas"]["BuyReminderLastPurchaseDto"];
+        };
         StorageLocationDto: {
             /** @description ID of the location */
             id: string;
@@ -2164,6 +2942,16 @@ export interface components {
             /** @description Icon for the location */
             icon: string | null;
         };
+        AiQuotaDto: {
+            /** @description Premium: AI features without a monthly limit. */
+            unlimited: boolean;
+            /** @description AI features a free account gets per month. */
+            limit: number;
+            /** @description AI features used this month. */
+            used: number;
+            /** @description AI features left this month; 0 when unlimited. */
+            remaining: number;
+        };
         CreateUserDto: {
             uid: string;
             email: string;
@@ -2175,10 +2963,12 @@ export interface components {
         UserSubscriptionDto: {
             /** @enum {string} */
             status: "active" | "cancelled" | "expired";
-            productId: string;
+            productId?: string | null;
             expiresAt: string;
             /** @enum {string} */
             store?: "APP_STORE" | "PLAY_STORE" | "STRIPE";
+            /** @description Granted on the admin page rather than bought. Store events do not end it. */
+            grantedManually?: boolean;
         };
         UserPermissionsDto: {
             isNotAllowedToAddRecipes?: boolean;
@@ -2197,19 +2987,43 @@ export interface components {
         };
         NotificationSettingsDto: {
             notificationTime?: string;
+            /**
+             * @description Days before the best before date on which to send an expiry reminder (0 = on the day itself). When a request leaves it out, it is derived from the legacy `atExpiryDate` / `sevenDays` / `thirtyDays` toggles; responses always contain it.
+             * @example [
+             *       0,
+             *       14,
+             *       30
+             *     ]
+             */
+            reminderDays?: number[];
+            /**
+             * @deprecated
+             * @description Use reminderDays
+             */
             thirtyDays?: boolean;
+            /**
+             * @deprecated
+             * @description Use reminderDays. Despite its name it stands for a reminder 14 days before expiry.
+             */
             sevenDays?: boolean;
+            /**
+             * @deprecated
+             * @description Use reminderDays
+             */
             atExpiryDate?: boolean;
         };
         UserDto: {
             uid: string;
             displayName: string;
+            /** @description Public profile picture key/URL. Safe to expose so members of a shared list can render each other’s avatars. */
+            profileImage?: string;
             /** @enum {string} */
             forcedPremiumTariff?: "single" | "twoUsers" | "fiveUsers";
             email: string;
             language?: string;
+            /** @description Whether the email address has been confirmed (verification link, or inherited from the Firebase account on import). */
+            emailVerified?: boolean;
             isTestUser?: boolean;
-            profileImage?: string;
             providerId?: string;
             providerUuid?: string;
             subscription?: components["schemas"]["UserSubscriptionDto"];
@@ -2222,6 +3036,12 @@ export interface components {
             userCountrySource?: "ip" | "geolocation" | "manually-set";
             premiumInvitation?: components["schemas"]["PremiumInvitationDataDto"];
             notificationSettings?: components["schemas"]["NotificationSettingsDto"];
+            /** @description ISO timestamp of the last `/me/last-seen` ping. Used by analytics to track user activity (NOT the auto-reduce cursor — see `autoReduceCursor`). */
+            lastSeen?: string;
+            /** @description ISO timestamp the app uses as the `since` parameter for the cold-start auto-reduce modal. Bumped via PATCH /me/auto-reduce-cursor after each modal presentation so accrual accumulates across sessions and stays in sync across devices. */
+            autoReduceCursor?: string;
+            /** @description The one-time tips (coach marks) this person has seen, on any device. Added via PUT /me/seen-tips/:tip. */
+            seenTips?: string[];
         };
         SubscriptionValidationResponseDto: {
             /** @example pantrist_premium_five */
@@ -2235,11 +3055,158 @@ export interface components {
             currentList?: string;
             language?: string;
         };
+        AuthRolloutDto: {
+            /** @enum {string} */
+            mode: "off" | "allowlist" | "percent" | "all";
+            /** @description Whether the caller (identified by the bearer token, Firebase or Pantrist) may sign in through /auth. Without a token this reflects the global mode only. */
+            enabled: boolean;
+            /** @description Whether brand-new accounts may be created through /auth. */
+            newAccounts: boolean;
+            /** @description True when the caller already has a Pantrist credential (password or linked provider) or an active session, i.e. was migrated before. Only set when a token was sent. */
+            migrated?: boolean;
+        };
+        RegisterDto: {
+            /** @description Client label: ios, android, web, wear, … */
+            client?: string;
+            /** @description Human readable device name for the session list. */
+            deviceName?: string;
+            /** Format: email */
+            email: string;
+            password: string;
+            displayName: string;
+            /** @description BCP 47 language tag the app runs in. */
+            language?: string;
+        };
+        AuthSessionResponseDto: {
+            /** @description JWT to send as `Authorization: Bearer …`. */
+            accessToken: string;
+            /** @description Seconds until the access token expires. */
+            expiresIn: number;
+            /** @description Opaque token for POST /auth/token/refresh. Rotates on every refresh; store the newest one and never refresh concurrently. */
+            refreshToken: string;
+            /** @example Bearer */
+            tokenType: string;
+            /** @description Id of the session the tokens belong to. */
+            sessionId: string;
+            /** @description True when this call created the account. */
+            isNewUser: boolean;
+            user?: components["schemas"]["UserDto"];
+        };
+        LoginDto: {
+            /** @description Client label: ios, android, web, wear, … */
+            client?: string;
+            /** @description Human readable device name for the session list. */
+            deviceName?: string;
+            /** Format: email */
+            email: string;
+            password: string;
+        };
+        ProviderProfileDto: {
+            givenName?: string;
+            familyName?: string;
+            email?: string;
+        };
+        ProviderLoginDto: {
+            /** @description Client label: ios, android, web, wear, … */
+            client?: string;
+            /** @description Human readable device name for the session list. */
+            deviceName?: string;
+            /** @description Google / Apple ID token (JWT). Required for google.com and apple.com. */
+            idToken?: string;
+            /** @description Facebook access token. Required for facebook.com. */
+            accessToken?: string;
+            /** @description Raw nonce sent to Apple, if the client used one. */
+            nonce?: string;
+            profile?: components["schemas"]["ProviderProfileDto"];
+            language?: string;
+        };
+        FirebaseExchangeDto: {
+            /** @description Client label: ios, android, web, wear, … */
+            client?: string;
+            /** @description Human readable device name for the session list. */
+            deviceName?: string;
+            /** @description Current Firebase ID token of the signed-in user. */
+            idToken: string;
+        };
+        RefreshTokenDto: {
+            /** @description The refresh token. Optional only so a browser can present the HttpOnly refresh cookie instead, which is how a web app whose storage the browser cleared gets back in. One of the two must be there, and the body wins when both are. */
+            refreshToken?: string;
+            /** @description Opaque id identifying this renewal attempt. Generate one per renewal, keep it for every retry of that renewal including across app restarts, and drop it once the renewal succeeds. It lets the API tell a client retrying a request whose response was lost from someone replaying a stolen token, and serve the first without a time limit. Optional: without it the API falls back to a short grace window. */
+            requestId?: string;
+        };
+        AccessTokenResponseDto: {
+            accessToken: string;
+            /** @description Seconds until the access token expires. */
+            expiresIn: number;
+        };
+        LogoutDto: {
+            /** @description Refresh token of the session to end. When omitted the session of the bearer token is ended. */
+            refreshToken?: string;
+        };
+        AuthSessionInfoDto: {
+            id: string;
+            client?: string | null;
+            deviceName?: string | null;
+            userAgent?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            lastUsedAt: string;
+            /**
+             * Format: date-time
+             * @description When the session expires through inactivity; null means never.
+             */
+            expiresAt?: string | null;
+            /** @description True for the session the request was made with. */
+            current: boolean;
+        };
+        ForgotPasswordDto: {
+            /** Format: email */
+            email: string;
+            language?: string;
+        };
+        ResetPasswordDto: {
+            /** @description Client label: ios, android, web, wear, … */
+            client?: string;
+            /** @description Human readable device name for the session list. */
+            deviceName?: string;
+            /** @description Token from the reset link. */
+            token: string;
+            newPassword: string;
+        };
+        ChangePasswordDto: {
+            /** @description Required when the account already has a password. */
+            currentPassword?: string;
+            newPassword: string;
+        };
+        VerifyEmailDto: {
+            /** @description Token from the verification link. */
+            token: string;
+        };
+        VerifyEmailResponseDto: {
+            /** @description The address that is now verified. */
+            email: string;
+        };
+        ChangeEmailDto: {
+            /** Format: email */
+            newEmail: string;
+            /** @description Required when the account has a password. */
+            currentPassword?: string;
+        };
+        AuthMethodsDto: {
+            email: string;
+            emailVerified: boolean;
+            /** @description Whether an email/password credential exists. */
+            hasPassword: boolean;
+            providers: ("google.com" | "apple.com" | "facebook.com")[];
+        };
         GetRecipeCollectionsWithImagesDto: {
             uuid: string;
             name: string;
             shareInList: boolean;
             connectedRecipeImages: string[];
+            /** @description Total number of recipes in the collection. May be larger than connectedRecipeImages.length because recipes without an image are still counted. */
+            recipeCount: number;
         };
         CollectionWithRecipeFlag: {
             uuid: string;
@@ -2284,6 +3251,16 @@ export interface components {
              * @enum {string}
              */
             type: "smart" | "normal";
+            /**
+             * @description Translate the parsed recipe into this language instead of preserving the source language. Accepts a BCP 47 tag (e.g. `de`, `en-US`, `pt-BR`). Only the human-readable fields are translated; unit codes, categories and allergens stay as their canonical identifiers. Omit to keep the source language (default). Only applies to the smart parser, since the basic parser does not run the recipe through a model.
+             * @example de
+             */
+            targetLanguage?: string;
+            /**
+             * @description Leave `nutriments` and `allergens` out of the answer and estimate them with a follow-up call to `POST /parse-recipe/nutriments`. Roughly halves the wait, because the first call then needs almost no reasoning budget. Clients that do not set it keep the single call.
+             * @default false
+             */
+            deferNutriments: boolean;
         };
         RecipeApi: {
             name: string;
@@ -2297,6 +3274,15 @@ export interface components {
             imageUrl: string;
             description: string;
         };
+        ParseRecipeAdditionalAttachment: {
+            /** @description Base64-encoded data of the additional attachment */
+            base64: string;
+            /**
+             * @description MIME type of the additional attachment
+             * @example image/jpeg
+             */
+            mimeType?: string;
+        };
         ParseRecipeFromAttachment: {
             /**
              * @description The base64 encoded data of the attachment (image/document)
@@ -2309,6 +3295,18 @@ export interface components {
              * @example image/jpeg
              */
             mimeType: string;
+            /** @description Optional additional attachments parsed together with the primary one. Used when one recipe spans multiple photos so the AI sees them as a single unit. */
+            additionalAttachments?: components["schemas"]["ParseRecipeAdditionalAttachment"][];
+            /**
+             * @description Translate the parsed recipe into this language instead of preserving the source language. Accepts a BCP 47 tag (e.g. `de`, `en-US`, `pt-BR`). Only the human-readable fields are translated; unit codes, categories and allergens stay as their canonical identifiers. Omit to keep the source language (default).
+             * @example de
+             */
+            targetLanguage?: string;
+            /**
+             * @description Leave `nutriments` and `allergens` out of the answer and estimate them with a follow-up call to `POST /parse-recipe/nutriments`. Roughly halves the wait, because the first call then needs almost no reasoning budget. Clients that do not set it keep the single call.
+             * @default false
+             */
+            deferNutriments: boolean;
         };
         RecipeParsingResultDto: {
             /**
@@ -2323,8 +3321,8 @@ export interface components {
              * @example Banana Pancakes
              */
             name: string;
-            /** @description Number of times this recipe was favorited */
-            favorites: number;
+            /** @description Number of times this recipe was favorited. Read-only — any value sent on create/update is ignored; it is computed from likes. */
+            favorites?: number;
             /** @description Detailed recipe description */
             description?: string;
             /** @description Total time in minutes */
@@ -2342,10 +3340,12 @@ export interface components {
              * @example Portion
              */
             servingsUnit: string;
-            /** @description Whether the recipe is publicly visible */
+            /** @description Whether the recipe is publicly visible inside the app. Imports are kept out of the sitemap and carry robots: noindex regardless, so this never exposes somebody else's post to a search engine. */
             shouldBePublic: boolean;
             /** @description Recipe categories */
             categories: components["schemas"]["ReceiptCategory"][];
+            /** @description Allergens contained in the recipe (EU 14). Extracted by the recipe parser and/or derived from ingredients on save; clients should treat this as best-effort guidance, not a legal declaration. */
+            allergens?: components["schemas"]["Allergen"][];
             /**
              * @description Recipe language (IETF locale)
              * @example en-US
@@ -2376,6 +3376,16 @@ export interface components {
             ingredientCount?: number;
             /** @description Number of ingredients in the recipe that match to the stock. Only set when requesting recipe pagination with current stock */
             matchingIngredientCount?: number;
+            /** @description Names of the recipe ingredients that are NOT covered by the current stock (pantry staples such as salt, oil or water are excluded and always treated as available). Only set when filtering by ingredients. */
+            missingIngredients?: string[];
+            /** @description Number of missing ingredients the user could substitute from their pantry. Counted separately from matches — show as a softer "can substitute" state, not as "have it". Only set when filtering by ingredients and a substitution applies. */
+            substitutableCount?: number;
+            /** @description Names of the recipe ingredients that are not in stock but covered by a curated substitution from the pantry. These are excluded from missingIngredients. Only set when filtering by ingredients. */
+            substitutableIngredients?: string[];
+            /** @description Concrete "use X instead of Y" suggestions for the substitutable ingredients. Only set when filtering by ingredients and a substitution applies. */
+            substitutions?: components["schemas"]["SubstitutionSuggestionDto"][];
+            /** @description Where this recipe came from and how much of it a model wrote. Present on every recipe response, no separate call needed. Read-only: the server derives the whole block from the recipe itself and ignores whatever the client sends for it. */
+            source?: components["schemas"]["RecipeSourceDto"];
             /** @description Image in base64 format */
             imageBase64?: string;
             /**
@@ -2397,14 +3407,86 @@ export interface components {
              *     1. Mash bananas...
              */
             text: string;
+            /**
+             * @description Translate the parsed recipe into this language instead of preserving the source language. Accepts a BCP 47 tag (e.g. `de`, `en-US`, `pt-BR`). Only the human-readable fields are translated; unit codes, categories and allergens stay as their canonical identifiers. Omit to keep the source language (default).
+             * @example de
+             */
+            targetLanguage?: string;
+            /**
+             * @description Leave `nutriments` and `allergens` out of the answer and estimate them with a follow-up call to `POST /parse-recipe/nutriments`. Roughly halves the wait, because the first call then needs almost no reasoning budget. Clients that do not set it keep the single call.
+             * @default false
+             */
+            deferNutriments: boolean;
         };
-        MessageDto: {
-            from: string;
-            subject: string;
-            message: string;
-            language: string;
-            sendNoResponse: boolean;
-            cloudflareToken: string;
+        ParseRecipeCollectionAttachmentDto: {
+            /** @description Base64-encoded image or PDF. */
+            base64: string;
+            /**
+             * @description MIME type of the attachment.
+             * @example image/jpeg
+             */
+            mimeType?: string;
+        };
+        ParseRecipeCollectionRequestDto: {
+            /**
+             * @description URL of a social post or recipe page. A carousel with several recipes yields several results.
+             * @example https://www.instagram.com/p/ABC123/
+             */
+            url?: string;
+            /** @description Photos or PDFs. Images are grouped by recipe automatically: pages of one recipe become one result, distinct recipes become distinct results. */
+            attachments?: components["schemas"]["ParseRecipeCollectionAttachmentDto"][];
+            /**
+             * @description Translate the parsed recipes into this language instead of preserving the source language. BCP 47 tag.
+             * @example de
+             */
+            targetLanguage?: string;
+            /**
+             * @description Leave `nutriments` and `allergens` out of the answer and estimate them with a follow-up call to `POST /parse-recipe/nutriments`. Roughly halves the wait, because the first call then needs almost no reasoning budget. Clients that do not set it keep the single call.
+             * @default false
+             */
+            deferNutriments: boolean;
+        };
+        RecipeParsingCollectionResultDto: {
+            /** @description Every recipe found, in source order. Empty when the input held no recipe. */
+            recipes: components["schemas"]["RecipeParsingResultDto"][];
+            /** @description How many recipe candidates the source contained before the per-import cap: image groups for photos and carousels, entries for an export file. */
+            sourceCount: number;
+            /** @description Candidates beyond the per-import cap that were not parsed. The client can tell the user to import the rest separately. */
+            skippedCount: number;
+            /** @description PDF pages beyond the per-import page cap that were not read. Absent or 0 when every page was read. */
+            skippedPageCount?: number;
+        };
+        ParseNutrimentsIngredientDto: {
+            /** @description Ingredient name as the recipe lists it. */
+            name: string;
+            /** @description Amount in `volumeUnit`. */
+            contentVolume?: number;
+            /** @description Unit of the amount, e.g. `g`. */
+            volumeUnit?: string;
+        };
+        ParseNutrimentsRequestDto: {
+            ingredients: components["schemas"]["ParseNutrimentsIngredientDto"][];
+            /**
+             * @description Servings the amounts above are for. Defaults to 1.
+             * @example 4
+             */
+            defaultServings?: number;
+            /**
+             * @description Serving unit, e.g. `Portion`.
+             * @example Portion
+             */
+            servingsUnit?: string;
+            /**
+             * @description Translate nothing but keep the analysis consistent with this language. BCP 47 tag.
+             * @example de
+             */
+            targetLanguage?: string;
+        };
+        ParseNutrimentsResultDto: {
+            /** @description Per serving. Absent when nothing could be estimated. */
+            nutriments?: components["schemas"]["ArticleNutrimentsDto"];
+            /** @description EU 14 allergens found in the ingredients. */
+            allergens?: string[];
         };
         CreateSubscriptionDto: {
             priceId: string;
@@ -2466,7 +3548,9 @@ export interface components {
             updatedAt: string;
         };
         CreateInvitationDto: {
-            invitedUserEmail: string;
+            invitedUserEmail?: string;
+            /** @description Uid of a member of one of the inviter's lists; others are rejected with 403. */
+            invitedUserUid?: string;
         };
         SyncFirebaseInvitationDto: Record<string, never>;
         NotificationPayloadDto: {
@@ -2478,6 +3562,38 @@ export interface components {
             topic: string;
             notification: components["schemas"]["NotificationPayloadDto"];
             data?: Record<string, never>;
+        };
+        AppVersionPolicyDto: {
+            /** @enum {string} */
+            platform: "ios" | "android" | "web";
+            /** @description Versions below this are blocked until updated. Null when nothing is forced. */
+            minimumVersion: string | null;
+            /** @description Versions below this get a dismissible hint. Null when there is none. */
+            recommendedVersion: string | null;
+            /** @description Why the update is needed, in German. */
+            messageDe: string | null;
+            /** @description Why the update is needed, in English. */
+            messageEn: string | null;
+        };
+        HelpArticleDto: {
+            title: string;
+            /** @description The start of the answer as plain text. */
+            preview: string;
+            /** @description The article on pantrist.com. */
+            url: string;
+        };
+        ReportSubstitutionDto: {
+            /** @description Optional free-text reason ("does not work in baking"). */
+            reason?: string;
+        };
+        ReportSubstitutionResultDto: {
+            /** @description Distinct users who reported this substitution so far. */
+            reportCount: number;
+            /**
+             * @description Lifecycle after this report. `disabled` means the hint will no longer be shown to anyone.
+             * @enum {string}
+             */
+            status: "live" | "rejected" | "disabled";
         };
         ClientLogEntryDto: {
             /** @enum {string} */
@@ -2511,6 +3627,282 @@ export interface components {
             /** @description Number of entries dropped during ingest. */
             rejected: number;
         };
+        CreateNfcTagDto: {
+            /** @description Client-supplied tag id (e.g. generated by a local, account-less client). Reusing the same id upserts the existing tag instead of creating a duplicate. Omit to let the server generate one. */
+            id?: string;
+            /** @description UUID of the pantry article to deplete */
+            itemId: string;
+            /** @description Signed delta applied on trigger (negative reduces, e.g. -1) */
+            amountChange: number;
+            /** @description Optional label */
+            label?: string;
+        };
+        NfcTagDto: {
+            id: string;
+            listId: string;
+            /** @description UUID of the linked pantry article, or null if that article was deleted. */
+            itemId: string | null;
+            amountChange: number;
+            label: string | null;
+            /** @description Epoch milliseconds when the tag was last successfully written to a physical NFC tag, or null if never written. */
+            lastWrittenAt: number | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        UpdateNfcTagDto: {
+            itemId?: string;
+            amountChange?: number;
+            label?: string;
+        };
+        /** @enum {string} */
+        LoyaltyCardFormat: "ean13" | "ean8" | "upca" | "upce" | "code128" | "code39" | "code93" | "itf" | "codabar" | "qr" | "pdf417" | "aztec" | "datamatrix";
+        LoyaltyCardDto: {
+            uuid: string;
+            /** @description The user who owns and may edit the card. */
+            ownerUid: string;
+            label: string;
+            code: string;
+            format: components["schemas"]["LoyaltyCardFormat"];
+            color: string | null;
+            retailerKey: string | null;
+            listId: string | null;
+            supermarketUid: string | null;
+            /** @description List the card is shared with. Null when private, and also when the owner has left that list. */
+            sharedListId: string | null;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        UpsertLoyaltyCardDto: {
+            /** @description Display name, e.g. the market name. */
+            label: string;
+            /** @description Card number or QR payload, exactly as encoded in the code. */
+            code: string;
+            format: components["schemas"]["LoyaltyCardFormat"];
+            /** @description Card colour as #rrggbb, null for the default. */
+            color?: string | null;
+            /** @description Chain the card belongs to (e.g. "lidl"). Matches every market of that chain in every list. Set either this or listId + supermarketUid. */
+            retailerKey?: string | null;
+            /** @description List of the custom market the card belongs to. */
+            listId?: string | null;
+            /** @description Uid of the custom market (in listId) the card belongs to. */
+            supermarketUid?: string | null;
+            /** @description List whose members may show the card too. Null keeps it private. Must equal listId for a card bound to a custom market. */
+            sharedListId?: string | null;
+        };
+        RegisterMarketArrivalDeviceDto: {
+            /** @description This phone's FCM token, so the arrival push reaches only it. Without one the push goes to all of the user's devices. */
+            fcmToken?: string;
+        };
+        MarketArrivalDeviceDto: {
+            id: string;
+            /** @description Secret for the native transition POST (header x-market-arrival-token). Returned once; only its hash is stored. */
+            token: string;
+        };
+        MarketArrivalPayloadDto: {
+            listId: string;
+            marketUid: string;
+        };
+        MarketArrivalTransitionDto: {
+            /** @description Region identifier set by the app */
+            identifier: string;
+            /** @enum {string} */
+            transition: "enter" | "exit";
+            enter?: boolean;
+            payload?: components["schemas"]["MarketArrivalPayloadDto"];
+        };
+        StoreDto: {
+            /** @description Pantrist store id — stable across imports. */
+            id: string;
+            /** @description Chain key, e.g. "lidl". */
+            retailerKey: string;
+            /** @description Chain display name, e.g. "Lidl". */
+            retailerName: string;
+            name: string;
+            street?: string;
+            zip?: string;
+            city?: string;
+            /** @description WGS84 latitude. */
+            latitude: number;
+            /** @description WGS84 longitude. */
+            longitude: number;
+            /** @description Distance to the queried point in metres. Only set by the nearby search. */
+            distanceMeters?: number;
+            /** @description Opening hours as published by the chain, unnormalised. */
+            openingHours?: Record<string, never>;
+            /**
+             * @description Set when the market is shown without offers because no source carries its region. The app greys it out and explains it per chain.
+             * @enum {string}
+             */
+            noOffersReason?: "NO_SOURCE_FOR_REGION";
+            /** @description Where the chain shows this market's offers itself. Only set together with noOffersReason. */
+            externalOffersUrl?: string;
+        };
+        OfferIngredientMatchDto: {
+            /** @description Ingredient id in the Pantrist catalog. */
+            ingredientId: string;
+            /** @description Localised catalog name in the requested language. */
+            name: string;
+            /** @description 0..1. Below 0.6 the app must hedge the wording. */
+            confidence: number;
+            /** @enum {string} */
+            matchMethod: "gtin" | "text" | "llm" | "manual";
+            /**
+             * @description What the catalog says this ingredient contains: vegan, vegetarian (animal produce but no flesh), fish or meat. Absent while nobody has classified the entry.
+             *
+             *     Sent rather than applied, because this endpoint is anonymous and publicly cached: one filtered answer must never be served to the next reader. A client that knows what its user eats can filter on it, and the answer stays the same for everybody.
+             * @enum {string}
+             */
+            diet?: "vegan" | "vegetarian" | "fish" | "meat";
+            /** @description Declarable allergens the catalog names for this ingredient. An empty list means none were named, which is not a statement that the product is safe, and no client may present it as one. */
+            allergens?: ("Gluten" | "Crustaceans" | "Eggs" | "Fish" | "Peanuts" | "Soybeans" | "Milk" | "Nuts" | "Celery" | "Mustard" | "Sesame" | "SulphurDioxide" | "Lupin" | "Molluscs")[];
+        };
+        OfferDto: {
+            id: string;
+            title: string;
+            brand?: string;
+            /** @description Offer price in cents. */
+            priceCents?: number;
+            /** @description Struck-through reference price in cents. */
+            refPriceCents?: number;
+            /** @description Size of the whole pack, e.g. 1 with unitType "kg". For a multipack this is all units together: 10 (l) for a crate of 20 × 0,5 l, see packCount. */
+            unitAmount?: number;
+            unitType?: string;
+            /** @description How many equal units the pack holds, when more than one: 20 for a crate of 20 × 0,5 l. One unit is unitAmount / packCount. Absent for a single unit or when the retailer does not say. */
+            packCount?: number;
+            /**
+             * @description clearance: sold until stock runs out; validTo is a rolling one-day window, not an end date. Prices are the chain's online prices.
+             * @enum {string}
+             */
+            kind?: "clearance";
+            /** @description The retailer's own image URL. Load it directly from that URL — we neither store nor re-serve the image, and the retailer's server sees the request. */
+            imageUrl?: string;
+            /** @description Stable machine key for the source's own department/category (e.g. "kaese-quark"), when it has one. Sparse — most offers have none. The app maps this to its own shopping-list category. */
+            sourceCategorySlug?: string;
+            /** @description Display name for sourceCategorySlug (e.g. "Käse"). */
+            sourceCategoryName?: string;
+            /** @description The app's own category id, already resolved from the source category. Pass this straight through when adding the offer to the shopping list; unset means the source had no (mappable) category, so the app's own name-based categorizer should decide instead. */
+            categoryUuid?: string;
+            /** @description First day the offer is valid (ISO date). Lies in the future on a day between two leaflets (e.g. a Sunday for a Monday-to-Saturday chain): the market then shows the next leaflet, which starts within three days, so the client should label it as upcoming rather than current. */
+            validFrom: string;
+            /** @description Last day the offer is valid (ISO date). */
+            validTo: string;
+            /** @description Catalog ingredients this offer was matched to. May be empty. */
+            ingredients: components["schemas"]["OfferIngredientMatchDto"][];
+        };
+        StoreOffersDto: {
+            storeId: string;
+            retailerKey: string;
+            storeName: string;
+            latitude: number;
+            longitude: number;
+            offers: components["schemas"]["OfferDto"][];
+            /**
+             * @description Set when the market is shown without offers because no source carries its region. The app greys it out and explains it per chain.
+             * @enum {string}
+             */
+            noOffersReason?: "NO_SOURCE_FOR_REGION";
+            /** @description Where the chain shows this market's offers itself. Only set together with noOffersReason. */
+            externalOffersUrl?: string;
+        };
+        OfferSearchResultDto: {
+            store: components["schemas"]["StoreDto"];
+            /** @description Only the offers at this store matching the search text — not the full catalog (see findOffersForStore for that). */
+            matchingOffers: components["schemas"]["OfferDto"][];
+        };
+        PantryOfferMatchDto: {
+            /** @description The pantry item's own uuid (list_item.uuid). */
+            listItemUuid: string;
+            /** @description The pantry item's own name, not the catalog ingredient's. */
+            articleName: string;
+            amount: number;
+            minimumAmount: number;
+            storeId: string;
+            storeName: string;
+            retailerKey: string;
+            /** @description The cheapest current offer matching this item, at the store above. Only one per pantry item — see findPantryMatchesForUser. */
+            offer: components["schemas"]["OfferDto"];
+        };
+        SetUserStoresDto: {
+            /** @description Store ids in display order, at most 10. */
+            storeIds: string[];
+        };
+        OfferRecipeIngredientDto: {
+            /** @description Ingredient name as it appears in the recipe. */
+            name: string;
+            /** @description Amount the recipe calls for. */
+            amount: number;
+            /** @description Unit the recipe states the amount in. */
+            unit: string;
+            /** @description False when no current offer covers this ingredient. Such an ingredient carries no price at all rather than an invented one. */
+            inOffer: boolean;
+            /** @description The offer this was priced from. */
+            offerId?: string;
+            /** @description Offer headline, as the leaflet prints it. */
+            offerTitle?: string;
+            /** @description The leaflet's own picture of the offer, where the source published one. What the shelf looks like settles in one glance whether the match is the right product, which a headline often does not. */
+            offerImageUrl?: string;
+            /** @description Brand the leaflet names, where it names one. Together with the picture it is what tells a shopper whether this is the product they meant. */
+            offerBrand?: string;
+            /**
+             * @description Set when the offer is not the ingredient itself but something that may stand in for it, because the ingredient is off the caller's diet: a vegan reading a Frikadellen recipe is shown the plant-based mince that is on offer, not the beef. Carries the recipe ingredient's own name, so the page can say what is being replaced.
+             * @example Hackfleisch
+             */
+            offerSubstitutesFor?: string;
+            /**
+             * @description Why that swap is acceptable, from the curated substitution edge, in the requested language.
+             * @example Pflanzliche Variante, 1:1 ersetzbar
+             */
+            offerSubstitutionNote?: string;
+            /** @description Store the offer is at. */
+            storeName?: string;
+            /** @description Retailer key of that store. */
+            retailerKey?: string;
+            /** @description First day this offer is valid (ISO date). */
+            validFrom?: string;
+            /** @description Last day this offer is valid (ISO date). */
+            validTo?: string;
+            /** @description Offer price for the whole pack, in cents. */
+            offerPriceCents?: number;
+            /** @description The struck-through reference price in cents, where the chain publishes one. */
+            refPriceCents?: number;
+            /** @description Share of the pack price attributable to the amount this recipe uses, in cents. */
+            estimatedCostCents?: number;
+            /** @description True when the share above is an upper bound rather than a proportion, because no pack size was published or the recipe states an amount like "2 pieces" that does not convert into one. Render it as "at most", never as a price. */
+            costIsUpperBound: boolean;
+        };
+        OfferRecipeIdeaDto: {
+            recipe: components["schemas"]["RecipeDto"];
+            /** @description True when the recipe is the caller's own. Own recipes take part like any other, private ones included, and rank ahead of others with the same coverage. */
+            isOwn: boolean;
+            /** @description Every ingredient of the recipe, with the offer covering it where there is one. */
+            ingredientOffers: components["schemas"]["OfferRecipeIngredientDto"][];
+            /**
+             * @description How many offers the reader's diet kept off this recipe. Present only when it kept some. It exists because an offer that was filtered away looks exactly like one that never existed, and the chain behind the filter (catalog entry, classification, matching) can be wrong in ways nobody would ever find out about. With a number, a page can say that something is missing and offer to show it.
+             * @example 5
+             */
+            dietHiddenCount?: number;
+            /** @description How many of the recipe's non-staple ingredients are on offer right now. */
+            matchedIngredientCount: number;
+            /** @description How many non-staple ingredients the recipe has. Salt, oil and water are excluded from both counts, so a recipe is not punished for needing them. */
+            ingredientCount: number;
+            /** @description Sum of the per-ingredient shares, in cents. Only ingredients actually on offer contribute, so this is a floor for the shopping bill, not the bill. */
+            totalCostCents?: number;
+            /** @description Estimated cost per serving, in cents. */
+            costPerServingCents?: number;
+            /** @description Always true. Every price here is an estimate from the offers currently on the shelf, and the app must label it as one. It is computed per request, so it never goes stale, it just changes. */
+            costIsEstimate: boolean;
+            /** @description Stores the matched offers are at. */
+            storeNames: string[];
+            /** @description Last day all the matched offers are still valid (ISO date), i.e. the earliest end among them. */
+            validTo?: string;
+        };
+        OfferRecipeIdeasResponseDto: {
+            ideas: components["schemas"]["OfferRecipeIdeaDto"][];
+            /** @description How many catalog ingredients are on offer at the given stores. Zero means the empty state, not an error. */
+            offeredIngredientCount: number;
+            /** @description True when this request triggered a generation for the caller's region and preferences because the pool had too little to offer. The ideas above already include what it produced. */
+            generatedForYou: boolean;
+        };
     };
     responses: never;
     parameters: never;
@@ -2520,6 +3912,25 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    RecipeController_getPlanStats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipePlanStatsDto"][];
+                };
+            };
+        };
+    };
     RecipeController_getByFilter: {
         parameters: {
             query?: never;
@@ -2540,6 +3951,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecipeDto"][];
+                };
+            };
+        };
+    };
+    RecipeController_getByFilterPaginated: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiFilterDto"];
+            };
+        };
+        responses: {
+            /** @description One page of recipes (max 10) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeDto"][];
+                };
+            };
+        };
+    };
+    RecipeController_getMatchState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipeMatchStateRequestDto"];
+            };
+        };
+        responses: {
+            /** @description One entry per requested uuid (in any order). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeMatchStateDto"][];
                 };
             };
         };
@@ -2671,6 +4130,54 @@ export interface operations {
         responses: {
             /** @description Recipe deleted successfully */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecipeSwipeController_getDeck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipeDeckRequestDto"];
+            };
+        };
+        responses: {
+            /** @description A deck of recipes */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeDto"][];
+                };
+            };
+        };
+    };
+    RecipeSwipeController_swipe: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-socket-id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwipeDecisionDto"];
+            };
+        };
+        responses: {
+            /** @description Swipe recorded */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3160,6 +4667,68 @@ export interface operations {
             };
         };
     };
+    ListArticleCatalogController_getArticleCatalogOverlay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArticleCatalogOverlayDto"];
+                };
+            };
+        };
+    };
+    ListArticleCatalogController_replaceArticleCatalogOverlay: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-socket-id"?: string;
+            };
+            path: {
+                listId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArticleCatalogOverlayDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArticleCatalogOverlayDto"];
+                };
+            };
+            /** @description Unknown seedLang or invalid tombstone */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The list is kept legacy */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     ListArticleCatalogController_upsertArticleCatalog: {
         parameters: {
             query?: never;
@@ -3186,6 +4755,13 @@ export interface operations {
                     "application/json": components["schemas"]["ArticleCatalogDto"];
                 };
             };
+            /** @description CATALOG_ITEM_ID_RESERVED: the item id `overlay` is reserved */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     ListArticleCatalogController_deleteArticleCatalog: {
@@ -3207,6 +4783,55 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description CATALOG_ITEM_ID_RESERVED: the item id `overlay` is reserved */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ListPurchasesController_getAisleOrderMarkets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AisleOrderMarketsDto"];
+                };
+            };
+        };
+    };
+    ListPurchasesController_getAisleOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AisleOrdersDto"];
+                };
             };
         };
     };
@@ -3254,6 +4879,55 @@ export interface operations {
         };
         responses: {
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurchasedItemDto"];
+                };
+            };
+        };
+    };
+    ListPurchasesController_getRecentPurchases: {
+        parameters: {
+            query?: {
+                before?: string;
+                /** @description Page size, 50 by default, at most 200. */
+                limit?: number;
+                /** @description YYYY-MM-DD: start the history at this day instead of today (the overview's date picker). Kept for every page of one walk. */
+                until?: string;
+            };
+            header?: never;
+            path: {
+                listId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurchasePageDto"];
+                };
+            };
+        };
+    };
+    ListPurchasesController_getPurchase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listId: string;
+                purchaseRowId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3450,6 +5124,62 @@ export interface operations {
             };
         };
     };
+    ListWeekPlanController_addEntry: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-socket-id"?: string;
+            };
+            path: {
+                listId: string;
+                date: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WeekPlanReceiptDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeekPlanDayDto"];
+                };
+            };
+        };
+    };
+    ListWeekPlanController_removeEntry: {
+        parameters: {
+            query: {
+                type: "recipe" | "manual";
+                uuid?: string;
+                name?: string;
+            };
+            header?: {
+                "x-socket-id"?: string;
+            };
+            path: {
+                listId: string;
+                date: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeekPlanDayDto"];
+                };
+            };
+        };
+    };
     ListCategoriesController_getCategories: {
         parameters: {
             query?: never;
@@ -3545,6 +5275,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    ListSupermarketsController_getSupermarkets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupermarketDto"][];
+                };
             };
         };
     };
@@ -4726,13 +6477,65 @@ export interface operations {
             };
         };
     };
-    AutoReduceController_suggestRate: {
+    AutoReduceController_getCursor: {
         parameters: {
-            query: {
-                barcode: string;
-                name: string;
-                brand: string;
+            query?: never;
+            header?: never;
+            path: {
+                listId: string;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Premium subscription required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoReduceCursorDto"];
+                };
+            };
+        };
+    };
+    AutoReduceController_bumpCursor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Premium subscription required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoReduceCursorDto"];
+                };
+            };
+        };
+    };
+    AutoReduceController_preview: {
+        parameters: {
+            query?: never;
             header?: never;
             path: {
                 listId: string;
@@ -4756,9 +6559,13 @@ export interface operations {
             };
         };
     };
-    BuyRemindersController_list: {
+    AutoReduceController_suggestRate: {
         parameters: {
-            query?: never;
+            query: {
+                barcode: string;
+                name: string;
+                brand: string;
+            };
             header?: never;
             path: {
                 listId: string;
@@ -4768,6 +6575,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Premium subscription required */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4842,6 +6656,31 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    S3Controller_getImage: {
+        parameters: {
+            query: {
+                /** @description S3 key of the image to fetch (e.g. `article/{listId}/{articleId}`). */
+                path: string;
+                /** @description When `true`, returns the ~100px-wide PNG thumbnail; otherwise the full-resolution original. */
+                thumbnail?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image stream. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
             };
         };
     };
@@ -5055,6 +6894,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ShoppingCartItemDto"];
+                };
+            };
+        };
+    };
+    IngredientSubstitutionController_report: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportSubstitutionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportSubstitutionResultDto"];
                 };
             };
         };

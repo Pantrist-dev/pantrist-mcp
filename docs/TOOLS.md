@@ -9,8 +9,9 @@ call `list_lists` to discover ids). All map to public REST endpoints except
 |---|---|---|---|
 | `list_lists` | — | `GET /list` | Returns the lists/pantries the user can access. Use an `id` as `listId`. |
 | `whoami` | — | `GET /user-management/me` | Email, display name, login method and uid of the connected account. For support: an empty `list_lists` usually means the app is signed in to a different account. |
+| `list_supermarkets` | `listId?` | `GET /list/{listId}/supermarkets` | `{ uid, name }` of each market on the list, for `supermarketIds` below. |
 | `list_shopping_items` | `listId?` | `GET /list/{listId}/shoppingList` | Full item objects (`ArticleDto`). |
-| `add_shopping_item` | `name`, `listId?` | `POST …/shoppingList/add-by-name` | Returns the created item. |
+| `add_shopping_item` | `name`, `supermarketIds?`, `listId?` | `POST …/shoppingList/add-by-name` | Returns the created item. `supermarketIds` puts it on those markets; an unknown uid is a 400. |
 | `check_shopping_item` | `itemId`, `listId?` | `POST …/shoppingList/{itemId}/check` | Marks done / removes / moves to pantry per list settings. |
 | `delete_shopping_item` | `itemId`, `listId?` | `DELETE …/shoppingList/{itemId}` | Returns a confirmation string (204 upstream). |
 | `list_pantry_items` | `listId?` | `GET /list/{listId}/pantryList` | Full item objects. |

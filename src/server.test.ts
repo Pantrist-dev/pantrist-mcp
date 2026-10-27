@@ -23,7 +23,13 @@ const echo = http.createServer((req, res) => {
       body,
     });
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true }));
+    res.end(
+      JSON.stringify(
+        req.url?.endsWith('/supermarkets')
+          ? [{ uid: 'coop', name: 'Coop', geofenceLat: 47.01, iconId: 'store' }]
+          : { ok: true },
+      ),
+    );
   });
 });
 echo.listen(0);
@@ -175,4 +181,56 @@ test('currentUser() refuses to call the API without a token', async () => {
     /Authentication required/,
   );
   assert.equal(received.length, 0);
+});
+
+// The tool handlers themselves, through the server they are registered on.
+const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
+const { registerTools } = await import('./tools.js');
+const toolServer = new McpServer({ name: 'test', version: '0' });
+registerTools(toolServer);
+
+function callTool(name: string, args: Record<string, unknown>) {
+  const tool = (
+    toolServer as unknown as {
+      _registeredTools: Record<
+        string,
+        { handler: (args: unknown, extra: unknown) => Promise<unknown> }
+      >;
+    }
+  )._registeredTools[name];
+  return tokenStore.run({ token: 'tok-xyz' }, () =>
+    tool.handler(args, {}),
+  ) as Promise<{ content: { text: string }[] }>;
+}
+
+test('list_supermarkets returns only uid and name of each market', async () => {
+  received.length = 0;
+  const result = await callTool('list_supermarkets', { listId: 'L9' });
+
+  assert.equal(received[0].url, '/list/L9/supermarkets');
+  assert.deepEqual(JSON.parse(result.content[0].text), [
+    { uid: 'coop', name: 'Coop' },
+  ]);
+});
+
+test('add_shopping_item sends the markets along', async () => {
+  received.length = 0;
+  await callTool('add_shopping_item', {
+    listId: 'L9',
+    name: 'WC-Papier',
+    supermarketIds: ['coop'],
+  });
+
+  assert.equal(received[0].url, '/list/L9/shoppingList/add-by-name');
+  assert.deepEqual(JSON.parse(received[0].body), {
+    name: 'WC-Papier',
+    supermarketIds: ['coop'],
+  });
+});
+
+test('add_shopping_item without markets sends the name alone', async () => {
+  received.length = 0;
+  await callTool('add_shopping_item', { listId: 'L9', name: 'Milch' });
+
+  assert.deepEqual(JSON.parse(received[0].body), { name: 'Milch' });
 });
