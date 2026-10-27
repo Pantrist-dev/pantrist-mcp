@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { client, resolveListId, unwrap } from './api.js';
+import { client, currentUser, resolveListId, unwrap } from './api.js';
 
 /**
  * Recipe categories accepted by `/recipe/filter`. Kept in lockstep with the
@@ -57,6 +57,26 @@ export function registerTools(server: McpServer): void {
     'List the shopping lists / pantries the authenticated user can access. Read-only. Returns an array of list objects each with `uuid`, `name`, and the user\'s role on that list — use a returned `uuid` as the `listId` argument for every other tool here.',
     {},
     async () => text(unwrap(await client().GET('/list'))),
+  );
+
+  server.tool(
+    'whoami',
+    'Show which Pantrist account this connection is signed in as. Read-only. Returns `email`, `displayName`, `loginMethod` ("google.com", "apple.com" or "facebook.com"; an email/password account may show "password" or null) and `uid`. Use it when `list_lists` comes back empty or lacks a list the user expects: the user is then usually signed in to the Pantrist app with a different account, or uses the app without one.',
+    {},
+    async () => {
+      const user = await currentUser();
+      if (!user) {
+        return text('No Pantrist account is linked to this connection.');
+      }
+      // Only what identifies the account; the full UserDto also carries
+      // subscription, notification and location data the model has no use for.
+      return text({
+        email: user.email,
+        displayName: user.displayName,
+        loginMethod: user.providerId ?? null,
+        uid: user.uid,
+      });
+    },
   );
 
   // --- shopping list -------------------------------------------------------

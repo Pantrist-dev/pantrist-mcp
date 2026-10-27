@@ -64,6 +64,13 @@ function currentToken(): string | undefined {
  * OpenAPI spec — so request/response shapes track the API automatically.
  */
 export function client() {
+  return createClient<paths>({
+    baseUrl: BASE,
+    headers: { Authorization: bearer() },
+  });
+}
+
+function bearer(): string {
   const token = currentToken();
   if (!token) {
     // Surfaced verbatim to the MCP caller, so keep it generic; the
@@ -71,9 +78,33 @@ export function client() {
     // expects what) belong in logs/docs, not the error stream.
     throw new Error('Authentication required.');
   }
-  return createClient<paths>({
-    baseUrl: BASE,
-    headers: { Authorization: `Bearer ${token}` },
+  return `Bearer ${token}`;
+}
+
+/** The fields of the API's `UserDto` this server reads. */
+export interface CurrentUser {
+  uid: string;
+  email: string;
+  displayName: string;
+  providerId?: string;
+}
+
+/**
+ * The account behind the current token. `GET /user-management/me` is tagged
+ * app-specific and left out of the public spec, so it has no generated type
+ * and is fetched by hand. Resolves to `null` when the API knows no user for
+ * the token.
+ */
+export async function currentUser(): Promise<CurrentUser | null> {
+  const response = await fetch(`${BASE}/user-management/me`, {
+    headers: { Authorization: bearer() },
+  });
+  const text = await response.text();
+  const body: unknown = text ? JSON.parse(text) : null;
+  return unwrap<CurrentUser | null>({
+    data: response.ok ? (body as CurrentUser | null) : undefined,
+    error: response.ok ? undefined : body,
+    response,
   });
 }
 

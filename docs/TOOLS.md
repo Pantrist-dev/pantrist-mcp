@@ -1,12 +1,14 @@
 # Tool reference
 
-12 curated tools. Most accept an optional `listId`; if omitted it falls back to
+15 curated tools. Most accept an optional `listId`; if omitted it falls back to
 `PANTRIST_LIST_ID` **in stdio mode only** (HTTP mode requires it explicitly —
-call `list_lists` to discover ids). All map to public REST endpoints.
+call `list_lists` to discover ids). All map to public REST endpoints except
+`whoami`, whose route the API tags app-specific.
 
 | Tool | Args | REST call | Notes |
 |---|---|---|---|
 | `list_lists` | — | `GET /list` | Returns the lists/pantries the user can access. Use an `id` as `listId`. |
+| `whoami` | — | `GET /user-management/me` | Email, display name, login method and uid of the connected account. For support: an empty `list_lists` usually means the app is signed in to a different account. |
 | `list_shopping_items` | `listId?` | `GET /list/{listId}/shoppingList` | Full item objects (`ArticleDto`). |
 | `add_shopping_item` | `name`, `listId?` | `POST …/shoppingList/add-by-name` | Returns the created item. |
 | `check_shopping_item` | `itemId`, `listId?` | `POST …/shoppingList/{itemId}/check` | Marks done / removes / moves to pantry per list settings. |

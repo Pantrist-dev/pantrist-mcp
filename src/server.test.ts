@@ -34,6 +34,7 @@ delete process.env.PANTRIST_LIST_ID;
 
 const {
   client,
+  currentUser,
   tokenStore,
   unwrap,
   resolveListId,
@@ -156,4 +157,22 @@ test('DELETE /recipe/{uid} — the delete_recipe path', async () => {
   assert.equal(received[0].method, 'DELETE');
   assert.equal(received[0].url, '/recipe/R7');
   assert.equal(received[0].auth, 'Bearer tok-xyz');
+});
+
+test('currentUser() asks /user-management/me with the request-context Bearer — the whoami path', async () => {
+  received.length = 0;
+  await tokenStore.run({ token: 'tok-xyz' }, () => currentUser());
+  assert.equal(received.length, 1);
+  assert.equal(received[0].method, 'GET');
+  assert.equal(received[0].url, '/user-management/me');
+  assert.equal(received[0].auth, 'Bearer tok-xyz');
+});
+
+test('currentUser() refuses to call the API without a token', async () => {
+  received.length = 0;
+  await assert.rejects(
+    tokenStore.run({}, () => currentUser()),
+    /Authentication required/,
+  );
+  assert.equal(received.length, 0);
 });

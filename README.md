@@ -180,6 +180,7 @@ forwards it.
 | Tool | REST route |
 |---|---|
 | `list_lists` | `GET /list` |
+| `whoami` | `GET /user-management/me` |
 | `list_shopping_items` | `GET /list/{listId}/shoppingList` |
 | `add_shopping_item` | `POST /list/{listId}/shoppingList/add-by-name` |
 | `check_shopping_item` | `POST /list/{listId}/shoppingList/{itemId}/check` |
