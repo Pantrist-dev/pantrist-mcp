@@ -184,7 +184,7 @@ export function registerTools(server: McpServer): void {
   // --- pantry --------------------------------------------------------------
   server.tool(
     'list_pantry_items',
-    'List all items currently stocked in the pantry for `listId`. Read-only. Returns an array of `ArticleDto` objects (`uuid`, `name`, `amount` = current stock, `unitId`, `pantrySettings.earliestBestBefore` for expiry tracking, `minimumAmount`, …); empty array if the pantry is empty. For shopping items use `list_shopping_items`; for stock changes on an existing item use `reduce_pantry_amount`; for metadata changes use `update_pantry_item`.',
+    'List all items currently stocked in the pantry for `listId`. Read-only. Returns an array of `ArticleDto` objects (`uuid`, `name`, `amount` = current stock, `unitId`, `pantrySettings.earliestBestBefore` for expiry tracking, `minimumAmount` (in packages, or in content of `unitId` when `minimumAmountMode` is `content`, e.g. 3 rolls out of packs of 8 with `contentVolume` 8), …); empty array if the pantry is empty. For shopping items use `list_shopping_items`; for stock changes on an existing item use `reduce_pantry_amount`; for metadata changes use `update_pantry_item`.',
     { ...listIdArg },
     async ({ listId }) =>
       text(
