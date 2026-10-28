@@ -185,7 +185,7 @@ test('currentUser() refuses to call the API without a token', async () => {
 
 // The tool handlers themselves, through the server they are registered on.
 const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
-const { registerTools } = await import('./tools.js');
+const { registerTools, applyPantryItemChanges } = await import('./tools.js');
 const toolServer = new McpServer({ name: 'test', version: '0' });
 registerTools(toolServer);
 
@@ -233,4 +233,90 @@ test('add_shopping_item without markets sends the name alone', async () => {
   await callTool('add_shopping_item', { listId: 'L9', name: 'Milch' });
 
   assert.deepEqual(JSON.parse(received[0].body), { name: 'Milch' });
+});
+
+// update_pantry_item merges onto the fetched article before its full-upsert
+// PUT; these pin down what the merge writes for each argument.
+const article = {
+  uuid: 'I42',
+  name: 'Joghurt',
+  amount: 3,
+  manageMinimumAmount: false,
+  minimumAmount: 1,
+  pantrySettings: {
+    earliestBestBefore: '2026-12-01',
+    articleList: [
+      { pantryUuid: '1', count: 2, bestBefore: '2026-12-01', calculatedBestBeforeDate: true },
+      { pantryUuid: 'fridge', count: 1, bestBefore: '2027-01-15' },
+    ],
+  },
+} as unknown as Parameters<typeof applyPantryItemChanges>[0];
+
+test('update_pantry_item merge: bestBefore goes on every batch as a user-set date', () => {
+  const merged = applyPantryItemChanges(article, { bestBefore: '2026-11-08' });
+
+  assert.deepEqual(merged.pantrySettings, {
+    earliestBestBefore: '2026-11-08',
+    articleList: [
+      { pantryUuid: '1', count: 2, bestBefore: '2026-11-08', calculatedBestBeforeDate: false },
+      { pantryUuid: 'fridge', count: 1, bestBefore: '2026-11-08', calculatedBestBeforeDate: false },
+    ],
+  });
+  assert.equal(merged.amount, 3);
+});
+
+test('update_pantry_item merge: bestBefore null clears the date', () => {
+  const merged = applyPantryItemChanges(article, { bestBefore: null });
+
+  assert.deepEqual(merged.pantrySettings, {
+    articleList: [
+      { pantryUuid: '1', count: 2 },
+      { pantryUuid: 'fridge', count: 1 },
+    ],
+  });
+});
+
+test('update_pantry_item merge: an item without batches gets one holding its stock', () => {
+  const empty = {
+    ...article,
+    pantrySettings: { articleList: [] },
+  } as typeof article;
+
+  const merged = applyPantryItemChanges(empty, { bestBefore: '2026-11-08' });
+
+  assert.deepEqual(merged.pantrySettings.articleList, [
+    { pantryUuid: '1', count: 3, bestBefore: '2026-11-08', calculatedBestBeforeDate: false },
+  ]);
+});
+
+test('update_pantry_item merge: minimumAmount switches tracking on unless told otherwise', () => {
+  const on = applyPantryItemChanges(article, { minimumAmount: 2 });
+  assert.equal(on.minimumAmount, 2);
+  assert.equal(on.manageMinimumAmount, true);
+
+  const off = applyPantryItemChanges(article, {
+    minimumAmount: 2,
+    manageMinimumAmount: false,
+  });
+  assert.equal(off.manageMinimumAmount, false);
+});
+
+test('update_pantry_item merge: minimumAmountMode is passed through', () => {
+  const merged = applyPantryItemChanges(article, {
+    minimumAmount: 20,
+    minimumAmountMode: 'content',
+  });
+
+  assert.equal(merged.minimumAmount, 20);
+  assert.equal(merged.minimumAmountMode, 'content');
+});
+
+test('update_pantry_item merge: omitted fields round-trip unchanged', () => {
+  const merged = applyPantryItemChanges(article, { name: 'Skyr', notes: null });
+
+  assert.equal(merged.name, 'Skyr');
+  assert.equal(merged.notes, null);
+  assert.equal(merged.minimumAmount, 1);
+  assert.equal(merged.manageMinimumAmount, false);
+  assert.equal(merged.pantrySettings, article.pantrySettings);
 });

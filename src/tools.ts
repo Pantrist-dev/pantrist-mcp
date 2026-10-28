@@ -1,6 +1,74 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { client, currentUser, resolveListId, unwrap } from './api.js';
+import type { components } from './generated/pantrist-api.js';
+
+type ArticleDto = components['schemas']['ArticleDto'];
+
+/** Fields `update_pantry_item` can change; omitted ones keep their value. */
+export interface PantryItemChanges {
+  name?: string;
+  brand?: string | null;
+  categoryUuid?: string;
+  unitId?: string;
+  notes?: string | null;
+  bestBefore?: string | null;
+  minimumAmount?: number;
+  minimumAmountMode?: ArticleDto['minimumAmountMode'];
+  manageMinimumAmount?: boolean;
+}
+
+/**
+ * Merge the requested changes into the current article for the full-upsert
+ * PUT. The best-before date lives per stock batch in
+ * `pantrySettings.articleList`, so a new date is written to every batch and
+ * mirrored into `earliestBestBefore`; the date is user-set from then on, so
+ * `calculatedBestBeforeDate` is cleared.
+ */
+export function applyPantryItemChanges(
+  current: ArticleDto,
+  changes: PantryItemChanges,
+): ArticleDto {
+  const { bestBefore, minimumAmount, manageMinimumAmount, ...metadata } =
+    changes;
+  const merged: ArticleDto = { ...current };
+  for (const [key, value] of Object.entries(metadata)) {
+    if (value !== undefined) Object.assign(merged, { [key]: value });
+  }
+
+  if (minimumAmount !== undefined) {
+    merged.minimumAmount = minimumAmount;
+    // Setting a minimum without tracking it would have no effect, so turn
+    // tracking on unless the caller explicitly said otherwise.
+    merged.manageMinimumAmount = manageMinimumAmount ?? true;
+  } else if (manageMinimumAmount !== undefined) {
+    merged.manageMinimumAmount = manageMinimumAmount;
+  }
+
+  if (bestBefore !== undefined) {
+    const batches = current.pantrySettings.articleList;
+    const articleList = (
+      batches.length > 0
+        ? batches
+        : // No batch yet: '1' is the default pantry every item lands in.
+          [{ pantryUuid: '1', count: current.amount }]
+    ).map((batch) => {
+      const { bestBefore: _old, calculatedBestBeforeDate: _calc, ...rest } =
+        batch;
+      return bestBefore === null
+        ? rest
+        : { ...rest, bestBefore, calculatedBestBeforeDate: false };
+    });
+    const { earliestBestBefore: _old, ...settings } = current.pantrySettings;
+    merged.pantrySettings = {
+      ...settings,
+      articleList,
+      ...(bestBefore === null ? {} : { earliestBestBefore: bestBefore }),
+    };
+  }
+
+  return merged;
+}
 
 /**
  * Recipe categories accepted by `/recipe/filter`. Kept in lockstep with the
@@ -280,7 +348,7 @@ export function registerTools(server: McpServer): void {
 
   server.tool(
     'update_pantry_item',
-    'Update an existing pantry item\'s metadata (rename, change unit, category, brand, notes). Internally fetches the current `ArticleDto` and PUTs back a merged copy — only the fields you pass change; everything else (current stock, price history, image URLs, autoRestock config) round-trips unchanged. Two API calls per invocation. Returns the updated `ArticleDto`. Use `reduce_pantry_amount` for stock changes — this tool only touches metadata.',
+    'Update an existing pantry item\'s metadata (rename, change unit, category, brand, notes, best-before date, minimum amount). Internally fetches the current `ArticleDto` and PUTs back a merged copy — only the fields you pass change; everything else (current stock, price history, image URLs, autoRestock config) round-trips unchanged. Two API calls per invocation. Returns the updated `ArticleDto`. Use `reduce_pantry_amount` for stock changes — this tool only touches metadata.',
     {
       itemId: z
         .string()
@@ -314,9 +382,36 @@ export function registerTools(server: McpServer): void {
         .describe(
           'Freeform notes. Omit to keep current; pass null to clear an existing note.',
         ),
+      bestBefore: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')
+        .nullable()
+        .optional()
+        .describe(
+          'Best-before date `YYYY-MM-DD`, applied to all of the item\'s stock (every batch in `pantrySettings.articleList`, so batches with different dates end up sharing this one). Feeds expiry tracking and the expiry calendar. Omit to keep current; pass null to clear.',
+        ),
+      minimumAmount: z
+        .number()
+        .min(0)
+        .optional()
+        .describe(
+          'Minimum stock; at or below it the item counts as low stock. In packages, or in content of `unitId` when `minimumAmountMode` is `content`. Setting it also enables `manageMinimumAmount` unless that is passed as false.',
+        ),
+      minimumAmountMode: z
+        .enum(['packages', 'content'])
+        .optional()
+        .describe(
+          'What `minimumAmount` counts: `packages` = whole packages; `content` = the content in `unitId` (`amount * contentVolume`), e.g. 3 rolls out of packs of 8. The shopping list still gets whole packages. Omit to keep current.',
+        ),
+      manageMinimumAmount: z
+        .boolean()
+        .optional()
+        .describe(
+          'Whether low-stock tracking is on for this item. Omit to keep current (or to have `minimumAmount` switch it on).',
+        ),
       ...listIdArg,
     },
-    async ({ itemId, name, brand, categoryUuid, unitId, notes, listId }) => {
+    async ({ itemId, listId, ...changes }) => {
       // PUT /pantryList/{itemId} is a FULL upsert — it replaces the row.
       // Fetch the current article first so the caller only has to send the
       // fields they want to change; everything else round-trips unchanged.
@@ -326,14 +421,7 @@ export function registerTools(server: McpServer): void {
           params: { path: { listId: resolvedListId, itemId } },
         }),
       );
-      const merged = {
-        ...current,
-        ...(name !== undefined ? { name } : {}),
-        ...(brand !== undefined ? { brand } : {}),
-        ...(categoryUuid !== undefined ? { categoryUuid } : {}),
-        ...(unitId !== undefined ? { unitId } : {}),
-        ...(notes !== undefined ? { notes } : {}),
-      };
+      const merged = applyPantryItemChanges(current, changes);
       return text(
         unwrap(
           await client().PUT('/list/{listId}/pantryList/{itemId}', {
