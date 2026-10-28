@@ -1222,7 +1222,7 @@
         ]
       },
       "put": {
-        "description": "Stores exactly `rows` on the default catalog of `seedLang` and puts the list on the overlay. 409 `CATALOG_OVERLAY_UNAVAILABLE`: the list is kept legacy, replace it with `PUT :listId/articleCatalog` instead. 400 `CATALOG_SEED_LANGUAGE_UNKNOWN` / `CATALOG_TOMBSTONE_NOT_SEED` for an unknown language or a tombstone without a `seed:` uuid.",
+        "description": "Stores exactly `rows` on the default catalog of `seedLang` and puts the list on the overlay. `seedLang` `none`: no default catalog, the rows are the whole catalog and none may be a tombstone. 409 `CATALOG_OVERLAY_UNAVAILABLE`: the list is kept legacy, replace it with `PUT :listId/articleCatalog` instead. 400 `CATALOG_SEED_LANGUAGE_UNKNOWN` / `CATALOG_TOMBSTONE_NOT_SEED` for an unknown language or a tombstone without a `seed:` uuid (or any tombstone on `none`).",
         "operationId": "ListArticleCatalogController_replaceArticleCatalogOverlay",
         "parameters": [
           {
@@ -4046,7 +4046,7 @@
             "name": "autoRestock",
             "required": false,
             "in": "query",
-            "description": "When true, and the resulting pantry amount lands at or below ``minimumAmount`` (with ``manageMinimumAmount`` enabled), also add the article to the shopping list. Same contract as the ``autoRestock`` body field on ``change-amount``; defaults to false so app-driven writes stay quiet.",
+            "description": "When true, and the resulting pantry amount lands at or below ``minimumAmount`` (with ``manageMinimumAmount`` enabled; counted in content when ``minimumAmountMode`` is ``content``), also add the article to the shopping list. Same contract as the ``autoRestock`` body field on ``change-amount``; defaults to false so app-driven writes stay quiet.",
             "schema": {
               "type": "boolean"
             }
@@ -4461,7 +4461,7 @@
             "name": "autoRestock",
             "required": false,
             "in": "query",
-            "description": "When true, and the resulting pantry amount lands at or below ``minimumAmount`` (with ``manageMinimumAmount`` enabled), also add the article to the shopping list. Same contract as the ``autoRestock`` body field on ``change-amount``; defaults to false so app-driven writes stay quiet.",
+            "description": "When true, and the resulting pantry amount lands at or below ``minimumAmount`` (with ``manageMinimumAmount`` enabled; counted in content when ``minimumAmountMode`` is ``content``), also add the article to the shopping list. Same contract as the ``autoRestock`` body field on ``change-amount``; defaults to false so app-driven writes stay quiet.",
             "schema": {
               "type": "boolean"
             }
@@ -7045,6 +7045,14 @@
           "displayName"
         ]
       },
+      "MinimumAmountMode": {
+        "type": "string",
+        "enum": [
+          "packages",
+          "content"
+        ],
+        "description": "What `minimumAmount` counts. 'packages' (the default): whole packages. 'content': the content of the packages in the article's unit (`amount * contentVolume`), e.g. 3 rolls out of packs of 8. The shopping list still gets whole packages."
+      },
       "PriceType": {
         "type": "string",
         "enum": [
@@ -7399,6 +7407,14 @@
           "minimumAmount": {
             "type": "number"
           },
+          "minimumAmountMode": {
+            "description": "What `minimumAmount` counts. 'packages' (the default): whole packages. 'content': the content of the packages in the article's unit (`amount * contentVolume`), e.g. 3 rolls out of packs of 8. The shopping list still gets whole packages.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MinimumAmountMode"
+              }
+            ]
+          },
           "amountToBuy": {
             "type": "number"
           },
@@ -7587,6 +7603,7 @@
           "amount",
           "manageMinimumAmount",
           "minimumAmount",
+          "minimumAmountMode",
           "amountToBuy",
           "priceType",
           "discountType",
@@ -8549,7 +8566,7 @@
           },
           "deleted": {
             "type": "boolean",
-            "description": "Tombstone: the seed item with this `seed:` uuid is removed from the list. Only `seed:` uuids may carry it."
+            "description": "Tombstone: the seed item with this `seed:` uuid is removed from the list. Only `seed:` uuids may carry it, and never on seedLang `none`."
           }
         },
         "required": [
@@ -8565,7 +8582,7 @@
           "seedLang": {
             "type": "string",
             "nullable": true,
-            "description": "Language of the default catalog the rows overlay (e.g. `de-DE`); null for a legacy list, whose rows are the whole catalog."
+            "description": "Language of the default catalog the rows overlay (e.g. `de-DE`); `none` for a list without a default catalog and null for a legacy list, whose rows are the whole catalog in both cases. A client treats a value it does not know like null."
           },
           "rows": {
             "type": "array",
@@ -9981,7 +9998,7 @@
           },
           "autoRestock": {
             "type": "boolean",
-            "description": "When true, and the resulting pantry amount lands at or below the item's configured `minimumAmount` (with `manageMinimumAmount` enabled), the server also adds the item to the shopping list by name. Designed for automation clients (Home Assistant NFC scans, voice assistants, etc.) that want a single round-trip 'consume + reorder' contract. Defaults to false so app-driven decrements keep their current behaviour.",
+            "description": "When true, and the resulting pantry amount lands at or below the item's configured `minimumAmount` (with `manageMinimumAmount` enabled; counted in content when `minimumAmountMode` is `content`), the server also adds the item to the shopping list by name. Designed for automation clients (Home Assistant NFC scans, voice assistants, etc.) that want a single round-trip 'consume + reorder' contract. Defaults to false so app-driven decrements keep their current behaviour.",
             "default": false
           },
           "source": {

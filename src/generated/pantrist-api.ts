@@ -465,7 +465,7 @@ export interface paths {
         get: operations["ListArticleCatalogController_getArticleCatalogOverlay"];
         /**
          * Replace a list's catalog with an overlay on the default catalog
-         * @description Stores exactly `rows` on the default catalog of `seedLang` and puts the list on the overlay. 409 `CATALOG_OVERLAY_UNAVAILABLE`: the list is kept legacy, replace it with `PUT :listId/articleCatalog` instead. 400 `CATALOG_SEED_LANGUAGE_UNKNOWN` / `CATALOG_TOMBSTONE_NOT_SEED` for an unknown language or a tombstone without a `seed:` uuid.
+         * @description Stores exactly `rows` on the default catalog of `seedLang` and puts the list on the overlay. `seedLang` `none`: no default catalog, the rows are the whole catalog and none may be a tombstone. 409 `CATALOG_OVERLAY_UNAVAILABLE`: the list is kept legacy, replace it with `PUT :listId/articleCatalog` instead. 400 `CATALOG_SEED_LANGUAGE_UNKNOWN` / `CATALOG_TOMBSTONE_NOT_SEED` for an unknown language or a tombstone without a `seed:` uuid (or any tombstone on `none`).
          */
         put: operations["ListArticleCatalogController_replaceArticleCatalogOverlay"];
         post?: never;
@@ -2057,6 +2057,11 @@ export interface components {
             /** @enum {string} */
             forcedPremiumTariff?: "single" | "twoUsers" | "fiveUsers";
         };
+        /**
+         * @description What `minimumAmount` counts. 'packages' (the default): whole packages. 'content': the content of the packages in the article's unit (`amount * contentVolume`), e.g. 3 rolls out of packs of 8. The shopping list still gets whole packages.
+         * @enum {string}
+         */
+        MinimumAmountMode: "packages" | "content";
         /** @enum {string} */
         PriceType: "total" | "perUnit";
         /** @enum {string} */
@@ -2157,6 +2162,8 @@ export interface components {
             amount: number;
             manageMinimumAmount: boolean;
             minimumAmount: number;
+            /** @description What `minimumAmount` counts. 'packages' (the default): whole packages. 'content': the content of the packages in the article's unit (`amount * contentVolume`), e.g. 3 rolls out of packs of 8. The shopping list still gets whole packages. */
+            minimumAmountMode: components["schemas"]["MinimumAmountMode"];
             amountToBuy: number;
             disableMinAmount?: boolean | null;
             /** @description Whether two entries of this article that differ only in contentVolume count as the same thing. null means the user has not been asked yet. */
@@ -2455,11 +2462,11 @@ export interface components {
             } | null;
             nutriments?: components["schemas"]["ArticleNutrimentsDto"] | null;
             complexBestBeforeData?: components["schemas"]["ArticleCatalogBestBeforeDatesDto"] | null;
-            /** @description Tombstone: the seed item with this `seed:` uuid is removed from the list. Only `seed:` uuids may carry it. */
+            /** @description Tombstone: the seed item with this `seed:` uuid is removed from the list. Only `seed:` uuids may carry it, and never on seedLang `none`. */
             deleted?: boolean;
         };
         ArticleCatalogOverlayDto: {
-            /** @description Language of the default catalog the rows overlay (e.g. `de-DE`); null for a legacy list, whose rows are the whole catalog. */
+            /** @description Language of the default catalog the rows overlay (e.g. `de-DE`); `none` for a list without a default catalog and null for a legacy list, whose rows are the whole catalog in both cases. A client treats a value it does not know like null. */
             seedLang: string | null;
             rows: components["schemas"]["ArticleCatalogOverlayRowDto"][];
         };
@@ -2876,7 +2883,7 @@ export interface components {
             /** @description Pantry id of the product group you want to change the amount of. If no group is found, a new one will be created */
             pantryId?: string;
             /**
-             * @description When true, and the resulting pantry amount lands at or below the item's configured `minimumAmount` (with `manageMinimumAmount` enabled), the server also adds the item to the shopping list by name. Designed for automation clients (Home Assistant NFC scans, voice assistants, etc.) that want a single round-trip 'consume + reorder' contract. Defaults to false so app-driven decrements keep their current behaviour.
+             * @description When true, and the resulting pantry amount lands at or below the item's configured `minimumAmount` (with `manageMinimumAmount` enabled; counted in content when `minimumAmountMode` is `content`), the server also adds the item to the shopping list by name. Designed for automation clients (Home Assistant NFC scans, voice assistants, etc.) that want a single round-trip 'consume + reorder' contract. Defaults to false so app-driven decrements keep their current behaviour.
              * @default false
              */
             autoRestock: boolean;
@@ -6190,7 +6197,7 @@ export interface operations {
     PantryListItemsController_addItem: {
         parameters: {
             query?: {
-                /** @description When true, and the resulting pantry amount lands at or below ``minimumAmount`` (with ``manageMinimumAmount`` enabled), also add the article to the shopping list. Same contract as the ``autoRestock`` body field on ``change-amount``; defaults to false so app-driven writes stay quiet. */
+                /** @description When true, and the resulting pantry amount lands at or below ``minimumAmount`` (with ``manageMinimumAmount`` enabled; counted in content when ``minimumAmountMode`` is ``content``), also add the article to the shopping list. Same contract as the ``autoRestock`` body field on ``change-amount``; defaults to false so app-driven writes stay quiet. */
                 autoRestock?: boolean;
             };
             header?: {
@@ -6346,7 +6353,7 @@ export interface operations {
     PantryListItemsController_upsertItem: {
         parameters: {
             query?: {
-                /** @description When true, and the resulting pantry amount lands at or below ``minimumAmount`` (with ``manageMinimumAmount`` enabled), also add the article to the shopping list. Same contract as the ``autoRestock`` body field on ``change-amount``; defaults to false so app-driven writes stay quiet. */
+                /** @description When true, and the resulting pantry amount lands at or below ``minimumAmount`` (with ``manageMinimumAmount`` enabled; counted in content when ``minimumAmountMode`` is ``content``), also add the article to the shopping list. Same contract as the ``autoRestock`` body field on ``change-amount``; defaults to false so app-driven writes stay quiet. */
                 autoRestock?: boolean;
             };
             header?: {
