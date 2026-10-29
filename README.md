@@ -193,6 +193,12 @@ forwards it.
 | `search_recipes` | `POST /recipe/filter` |
 | `get_recipe` | `GET /recipe/{recipeId}` |
 | `delete_recipe` | `DELETE /recipe/{recipeId}` |
+| `create_recipe` | `POST /recipe` (+ `PUT /recipe-collection/recipe/{recipeId}` with `collectionIds`) |
+| `update_recipe` | `GET /recipe/{recipeId}` + `PUT /recipe` |
+| `list_recipe_collections` | `GET /recipe-collection` |
+| `create_recipe_collection` | `POST /recipe-collection` |
+| `add_recipe_to_collection` | `GET /recipe-collection/with-connected-recipe/{recipeId}` + `PUT /recipe-collection/recipe/{recipeId}` |
+| `remove_recipe_from_collection` | same as `add_recipe_to_collection` |
 | `get_week_plan` | `GET /list/{listId}/weekPlan?from=&to=` |
 | `update_week_plan_day` | `PUT /list/{listId}/weekPlan/{date}` |
 

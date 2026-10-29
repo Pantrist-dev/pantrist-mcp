@@ -1,6 +1,6 @@
 # Tool reference
 
-15 curated tools. Most accept an optional `listId`; if omitted it falls back to
+21 curated tools. Most accept an optional `listId`; if omitted it falls back to
 `PANTRIST_LIST_ID` **in stdio mode only** (HTTP mode requires it explicitly —
 call `list_lists` to discover ids). All map to public REST endpoints except
 `whoami`, whose route the API tags app-specific.
@@ -20,7 +20,13 @@ call `list_lists` to discover ids). All map to public REST endpoints except
 | `update_pantry_item` | `itemId`, `name?`, `brand?`, `categoryUuid?`, `unitId?`, `notes?`, `bestBefore?`, `minimumAmount?`, `minimumAmountMode?`, `manageMinimumAmount?`, `listId?` | `GET` then `PUT …/pantryList/{itemId}` | Metadata only — use `reduce_pantry_amount` for stock. Fetches the current item first so omitted fields round-trip unchanged. Pass `null` to `brand`/`notes`/`bestBefore` to clear. `bestBefore` (`YYYY-MM-DD`) is written to every stock batch, so per-batch dates collapse into one. `minimumAmount` also switches `manageMinimumAmount` on unless that is passed as `false`. |
 | `search_recipes` | `searchString?`, `categories?`, `currentPage?` | `POST /recipe/filter` | Paginated; returns `{ results, totalCount, totalPages, currentPage }`. |
 | `get_recipe` | `recipeId` | `GET /recipe/{recipeId}` | Returns the full `RecipeDto`. |
-| `delete_recipe` | `recipeId` | `DELETE /recipe/{recipeId}` | API rejects deletes of recipes you don't own — that error is surfaced verbatim. |
+| `delete_recipe` | `recipeId` | `DELETE /recipe/{recipeId}` | A recipe you don't own (also one shared through a list) answers 404 — surfaced verbatim. |
+| `create_recipe` | `name`, `ingredients[]`, `steps[]`, `description?`, `language?`, `servings?`, `servingsUnit?`, `preparationTime?`, `cookingTime?`, `waitingTime?`, `totalTime?`, `categories?`, `link?`, `shouldBePublic?`, `collectionIds?` | `GET /user-management/me`, `POST /recipe`, then `PUT /recipe-collection/recipe/{recipeId}` | Always creates a new recipe (no duplicate check by name). Defaults like the app: private, author shown, 4 portions, `de-DE`; `totalTime` = sum of the parts. Ingredients `{ name, amount?=1, unit?="pieces", notes? }`, steps strings or `{ text, timerMinutes? }`. Ingredient names resolve against the shared ingredient catalog, never the article catalog. `collectionIds` are checked first: an unknown one fails before the recipe is saved. No `listId` — recipes belong to the user. No images. |
+| `update_recipe` | `recipeId` + any `create_recipe` field | `GET /recipe/{recipeId}` then `PUT /recipe` | Only passed fields change. `ingredients`, `steps`, `categories` and `collectionIds` replace, never merge. Read-only fields (`favorites`, `source`, match keys) are left out of the PUT. Another user's recipe is a 400 "You're not allowed to change the recipe". |
+| `list_recipe_collections` | `searchText?` | `GET /recipe-collection` | Own collections plus the ones list members share: `{ uuid, name, shareInList, recipeCount }`. |
+| `create_recipe_collection` | `name`, `shareInList?` | `POST /recipe-collection` | No duplicate check by name. `shareInList` defaults to false. |
+| `add_recipe_to_collection` | `recipeId`, `collectionId` | `GET /recipe-collection/with-connected-recipe/{recipeId}` then `PUT /recipe-collection/recipe/{recipeId}` | Adds one collection, keeps the others. The assignment route replaces all, hence the read first. Unknown `collectionId` fails. |
+| `remove_recipe_from_collection` | `recipeId`, `collectionId` | same as above | Removes one collection, keeps the others and the recipe. |
 | `get_week_plan` | `from`, `to`, `listId?` | `GET /list/{listId}/weekPlan?from=&to=` | Dates `YYYY-MM-DD`. |
 | `update_week_plan_day` | `date`, `list[]`, `listId?` | `PUT …/weekPlan/{date}` | `list` entries: `{ uuid?, name?, type?: recipe\|manual }`. Empty array clears the day. |
 

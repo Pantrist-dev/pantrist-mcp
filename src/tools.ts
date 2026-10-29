@@ -1,9 +1,13 @@
+import { randomUUID } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { client, currentUser, resolveListId, unwrap } from './api.js';
 import type { components } from './generated/pantrist-api.js';
 
 type ArticleDto = components['schemas']['ArticleDto'];
+type RecipeDto = components['schemas']['RecipeDto'];
+type IngredientDto = components['schemas']['IngredientDto'];
+type StepDto = components['schemas']['StepDto'];
 
 /** Fields `update_pantry_item` can change; omitted ones keep their value. */
 export interface PantryItemChanges {
@@ -84,8 +88,149 @@ const RECIPE_CATEGORIES = [
   'HighProtein', 'HighFiber', 'CleanEating', 'Keto', 'Pescatarian',
   'SugarFree', 'GlutenFree', 'LactoseFree', 'Detox', 'Vegetables',
   'Fruits', 'Meat', 'Fish', 'Poultry', 'Rice', 'Potatoes', 'Pasta',
-  'Sweet',
+  'Sweet', 'German', 'Italian', 'Asian', 'Mexican', 'Indian',
+  'Mediterranean', 'Oriental', 'Advanced',
 ] as const;
+
+/** Ingredient units (`IngredientDto.volumeUnit`). */
+const INGREDIENT_UNITS = [
+  'pieces', 'packet', 'g', 'kg', 'l', 'ml', 'cup', 'tbsp', 'tsp', 'lbs',
+  'qt', 'oz', 'fl-oz', 'gal', 'Pinch',
+] as const;
+
+/** Units a recipe's servings can be counted in (`RecipeDto.servingsUnit`). */
+const SERVINGS_UNITS = [
+  'Portion', 'pieces', 'packet', 'g', 'kg', 'l', 'ml', 'cup', 'tbsp', 'tsp',
+  'lbs', 'qt', 'oz', 'fl-oz', 'gal',
+] as const;
+
+const RECIPE_LANGUAGES = [
+  'de-DE', 'en-US', 'en-GB', 'pl-PL', 'sv-SE', 'nl-NL', 'pt-PT', 'pt-BR',
+  'it-IT', 'es-ES',
+] as const;
+
+export interface IngredientInput {
+  name: string;
+  amount?: number;
+  unit?: IngredientDto['volumeUnit'];
+  notes?: string;
+}
+
+export type StepInput = string | { text: string; timerMinutes?: number };
+
+/** Fields `create_recipe` / `update_recipe` take; omitted ones keep their value. */
+export interface RecipeChanges {
+  name?: string;
+  description?: string | null;
+  language?: (typeof RECIPE_LANGUAGES)[number];
+  servings?: number;
+  servingsUnit?: RecipeDto['servingsUnit'];
+  preparationTime?: number;
+  cookingTime?: number;
+  waitingTime?: number;
+  totalTime?: number;
+  categories?: RecipeDto['categories'];
+  ingredients?: IngredientInput[];
+  steps?: StepInput[];
+  link?: string | null;
+  shouldBePublic?: boolean;
+}
+
+/**
+ * The fields the save route accepts. It rejects any other property, and a
+ * fetched recipe carries several (`favorites`, `source`, the match counts),
+ * so an update sends this subset of the merged recipe rather than all of it.
+ */
+const WRITABLE_RECIPE_FIELDS = [
+  'uuid', 'imageUrl', 'name', 'description', 'totalTime', 'cookingTime',
+  'waitingTime', 'preparationTime', 'defaultServings', 'servingsUnit',
+  'shouldBePublic', 'categories', 'allergens', 'language', 'link',
+  'showAuthor', 'authorUuid', 'ingredients',
+  'steps', 'partialSteps', 'copiedFromReceiptUuid', 'nutriments',
+  'createdAt',
+] as const;
+
+function toIngredient({ name, amount, unit, notes }: IngredientInput): IngredientDto {
+  return {
+    name,
+    contentVolume: amount ?? 1,
+    volumeUnit: unit ?? 'pieces',
+    ...(notes ? { notes } : {}),
+  };
+}
+
+function toStep(step: StepInput): StepDto {
+  const { text, timerMinutes } =
+    typeof step === 'string' ? { text: step, timerMinutes: undefined } : step;
+  return {
+    text,
+    ingredients: [],
+    ...(timerMinutes !== undefined ? { timerMinutes } : {}),
+  };
+}
+
+/** Drop the server-derived match keys; the save derives them again. */
+function writableIngredient({
+  normalizedName: _n,
+  ingredientId: _i,
+  ...ingredient
+}: IngredientDto): IngredientDto {
+  return ingredient;
+}
+
+/**
+ * Merge the requested changes into a recipe for the full-replace save. With
+ * no `current` it builds a new recipe from the app's defaults (private,
+ * author shown, servings in portions). `ingredients` and `steps` replace
+ * the existing ones as a whole.
+ */
+export function applyRecipeChanges(
+  current: RecipeDto | undefined,
+  changes: RecipeChanges,
+  authorUuid: string,
+): RecipeDto {
+  const base: RecipeDto = current ?? {
+    uuid: randomUUID(),
+    name: '',
+    totalTime: 0,
+    preparationTime: 0,
+    defaultServings: 4,
+    servingsUnit: 'Portion',
+    shouldBePublic: false,
+    showAuthor: true,
+    categories: [],
+    language: 'de-DE',
+    authorUuid,
+    ingredients: [],
+    steps: [],
+  } as unknown as RecipeDto;
+
+  const { servings, ingredients, steps, ...fields } = changes;
+  const merged: RecipeDto = { ...base };
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== undefined) Object.assign(merged, { [key]: value });
+  }
+  if (servings !== undefined) merged.defaultServings = servings;
+  if (ingredients !== undefined) merged.ingredients = ingredients.map(toIngredient);
+  if (steps !== undefined) merged.steps = steps.map(toStep);
+  if (!current && changes.totalTime === undefined) {
+    merged.totalTime =
+      (merged.preparationTime ?? 0) +
+      (merged.cookingTime ?? 0) +
+      (merged.waitingTime ?? 0);
+  }
+
+  const body: Record<string, unknown> = {};
+  for (const key of WRITABLE_RECIPE_FIELDS) {
+    if (merged[key] !== undefined) body[key] = merged[key];
+  }
+  body.ingredients = merged.ingredients.map(writableIngredient);
+  body.steps = merged.steps.map((step) => ({
+    ...step,
+    ingredients: step.ingredients.map(writableIngredient),
+  }));
+  return body as unknown as RecipeDto;
+}
 
 /** Wrap any value as an MCP text content result. */
 function text(data: unknown) {
@@ -102,6 +247,172 @@ function text(data: unknown) {
       },
     ],
   };
+}
+
+/**
+ * Recipe fields shared by `create_recipe` and `update_recipe`. All optional
+ * here; `create_recipe` makes the ones a new recipe needs required.
+ */
+const recipeName = z.string().min(1).describe('Recipe name, e.g. "Linsen-Dal".');
+
+const recipeIngredients = z
+  .array(
+    z.object({
+      name: z
+        .string()
+        .describe(
+          'Plain ingredient name, e.g. "Karotte". The server resolves it against the shared ingredient catalog to match the recipe with the pantry, so keep amounts, units and preparation out of it.',
+        ),
+      amount: z
+        .number()
+        .min(0)
+        .optional()
+        .describe('Amount in `unit`. Defaults to 1.'),
+      unit: z
+        .enum(INGREDIENT_UNITS)
+        .optional()
+        .describe(
+          'Unit of `amount`. Defaults to "pieces". For "salt to taste" use amount 1, unit "Pinch" and the note.',
+        ),
+      notes: z
+        .string()
+        .optional()
+        .describe('Preparation or detail, e.g. "fein gerieben", "gegart", "nach Geschmack".'),
+    }),
+  )
+  .describe(
+    'Ingredients in display order. On update the whole list is replaced, not merged: pass every ingredient, also the unchanged ones.',
+  );
+
+const recipeSteps = z
+  .array(
+    z.union([
+      z.string(),
+      z.object({
+        text: z.string().describe('Instruction text of the step.'),
+        timerMinutes: z
+          .number()
+          .int()
+          .min(1)
+          .max(1440)
+          .optional()
+          .describe('Timer the cooking mode offers for this step.'),
+      }),
+    ]),
+  )
+  .describe(
+    'Steps in order, each a string or `{ text, timerMinutes }`. On update the whole list is replaced, not merged.',
+  );
+
+const recipeFieldArgs = {
+  name: recipeName.optional(),
+  description: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('Short description. On update pass null to clear.'),
+  language: z
+    .enum(RECIPE_LANGUAGES)
+    .optional()
+    .describe(
+      'Language the recipe is written in. The server matches ingredient names in this language, so it must fit the text. Defaults to "de-DE" on create.',
+    ),
+  servings: z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe('How many `servingsUnit` the recipe yields. Defaults to 4 on create.'),
+  servingsUnit: z
+    .enum(SERVINGS_UNITS)
+    .optional()
+    .describe('What `servings` counts. Defaults to "Portion" on create.'),
+  preparationTime: z
+    .number()
+    .min(0)
+    .optional()
+    .describe('Active preparation time in minutes (chopping, mixing). Defaults to 0 on create.'),
+  cookingTime: z
+    .number()
+    .min(0)
+    .optional()
+    .describe('Time on the stove or in the oven, in minutes.'),
+  waitingTime: z
+    .number()
+    .min(0)
+    .optional()
+    .describe('Resting, marinating or chilling time in minutes.'),
+  totalTime: z
+    .number()
+    .min(0)
+    .optional()
+    .describe(
+      'Total time in minutes. On create it defaults to preparationTime + cookingTime + waitingTime.',
+    ),
+  categories: z
+    .array(z.enum(RECIPE_CATEGORIES))
+    .optional()
+    .describe(
+      'Categories, e.g. ["Dinner", "Vegan", "Easy", "Indian"]. Meal types, diets, main ingredients, cuisines and `Easy`/`Advanced` for difficulty all live here. Replaces the existing categories on update.',
+    ),
+  ingredients: recipeIngredients.optional(),
+  steps: recipeSteps.optional(),
+  link: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('URL of the original recipe, if it comes from a website. On update pass null to clear.'),
+  shouldBePublic: z
+    .boolean()
+    .optional()
+    .describe(
+      'Whether other Pantrist users can find the recipe. Defaults to false (private; members of the user\'s lists still see it). Only set true when the user asks to publish it.',
+    ),
+  collectionIds: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Recipe collections to file the recipe into: `uuid`s from `list_recipe_collections`. Replaces the recipe\'s current collections. An unknown uuid fails the call before anything is saved.',
+    ),
+};
+
+/**
+ * Throw unless every id is a collection the user can see, so a wrong id
+ * fails before the recipe is written rather than being dropped silently by
+ * the assignment route.
+ */
+async function assertCollectionsExist(collectionIds: string[]): Promise<void> {
+  if (collectionIds.length === 0) return;
+  const known = new Set(
+    unwrap(await client().GET('/recipe-collection', {})).map((c) => c.uuid),
+  );
+  const unknown = collectionIds.filter((id) => !known.has(id));
+  if (unknown.length) {
+    throw new Error(
+      `Unknown recipe collection ${unknown.join(', ')}. Call \`list_recipe_collections\` for valid uuids.`,
+    );
+  }
+}
+
+async function setRecipeCollections(
+  recipeId: string,
+  collectionUuids: string[],
+): Promise<void> {
+  unwrap(
+    await client().PUT('/recipe-collection/recipe/{recipeUuid}', {
+      params: { path: { recipeUuid: recipeId } },
+      body: { collectionUuids },
+    }),
+  );
+}
+
+/** The user's collections with a flag whether `recipeId` is in each. */
+async function collectionsOfRecipe(recipeId: string) {
+  return unwrap(
+    await client().GET('/recipe-collection/with-connected-recipe/{recipeId}', {
+      params: { path: { recipeId } },
+    }),
+  );
 }
 
 const listIdArg = {
@@ -491,7 +802,7 @@ export function registerTools(server: McpServer): void {
 
   server.tool(
     'delete_recipe',
-    'Delete a recipe you own, unconditionally and irreversibly. The API rejects deletes for recipes belonging to another user with a 403; that error surfaces verbatim to the caller. Preview with `get_recipe` before calling to confirm authorship and contents.',
+    'Delete a recipe you own, unconditionally and irreversibly. A recipe of another user, also one shared through a list, answers 404 as if it did not exist; that error surfaces verbatim to the caller. Preview with `get_recipe` before calling to confirm authorship and contents.',
     {
       recipeId: z
         .string()
@@ -506,6 +817,157 @@ export function registerTools(server: McpServer): void {
         }),
       );
       return text(`Deleted recipe ${recipeId}.`);
+    },
+  );
+
+  server.tool(
+    'create_recipe',
+    'Create a new recipe owned by the signed-in user and optionally file it into recipe collections. Always creates a new recipe, even when one with the same name exists — call `search_recipes` first if the recipe might already be there, and change an existing one with `update_recipe` instead. Ingredient names are resolved against the shared ingredient catalog (for matching with the pantry); this creates no articles in the shopping or pantry catalog. Recipes belong to the user, not to a list, so there is no `listId`. Images can only be added in the app. Returns the saved `RecipeDto`, the same shape as `get_recipe`; its `uuid` is the `recipeId` for follow-up calls.',
+    {
+      ...recipeFieldArgs,
+      name: recipeName,
+      ingredients: recipeIngredients,
+      steps: recipeSteps,
+    },
+    async ({ collectionIds, ...changes }) => {
+      if (collectionIds) await assertCollectionsExist(collectionIds);
+      const user = await currentUser();
+      if (!user) throw new Error('No Pantrist account is linked to this connection.');
+      const recipe = unwrap(
+        await client().POST('/recipe', {
+          body: applyRecipeChanges(undefined, changes, user.uid),
+        }),
+      );
+      if (collectionIds?.length) {
+        await setRecipeCollections(recipe.uuid, collectionIds);
+      }
+      return text(recipe);
+    },
+  );
+
+  server.tool(
+    'update_recipe',
+    'Change a recipe the user owns. Only the fields you pass change; everything else (image, allergens, nutriments, partial steps) round-trips unchanged. `ingredients`, `steps` and `categories` are replaced as a whole, never merged: to fix one ingredient, pass the full list from `get_recipe` with that entry changed. `collectionIds` replaces the recipe\'s collections; to add or remove a single one use `add_recipe_to_collection` / `remove_recipe_from_collection`. Recipes of other users, also ones shared through a list, are rejected with a 400 "You\'re not allowed to change the recipe". Two or more API calls per invocation. Returns the saved `RecipeDto`. To read use `get_recipe`, to delete `delete_recipe`.',
+    {
+      recipeId: z
+        .string()
+        .describe('Recipe uuid (from `search_recipes`, `get_recipe` or `create_recipe`).'),
+      ...recipeFieldArgs,
+    },
+    async ({ recipeId, collectionIds, ...changes }) => {
+      if (collectionIds) await assertCollectionsExist(collectionIds);
+      // PUT /recipe replaces the whole recipe; fetch it so omitted fields
+      // round-trip unchanged.
+      const current = unwrap(
+        await client().GET('/recipe/{uid}', {
+          params: { path: { uid: recipeId } },
+        }),
+      );
+      const recipe = unwrap(
+        await client().PUT('/recipe', {
+          body: applyRecipeChanges(current, changes, current.authorUuid),
+        }),
+      );
+      if (collectionIds) await setRecipeCollections(recipeId, collectionIds);
+      return text(recipe);
+    },
+  );
+
+  // --- recipe collections --------------------------------------------------
+  server.tool(
+    'list_recipe_collections',
+    'List the recipe collections the user can file recipes into: their own plus the ones members of their lists share. Read-only. Returns `[{ uuid, name, shareInList, recipeCount }]`; pass a `uuid` in `collectionIds` of `create_recipe` / `update_recipe` or as `collectionId` of `add_recipe_to_collection`. Collections belong to the user, not to a list. Create a new one with `create_recipe_collection`.',
+    {
+      searchText: z
+        .string()
+        .optional()
+        .describe('Only collections whose name, or one of whose recipes\' names, contains this text.'),
+    },
+    async ({ searchText }) => {
+      const collections = unwrap(
+        await client().GET('/recipe-collection', {
+          params: { query: searchText ? { searchText } : {} },
+        }),
+      );
+      // Leave out the preview image URLs the app draws its tiles from.
+      return text(
+        collections.map(({ uuid, name, shareInList, recipeCount }) => ({
+          uuid,
+          name,
+          shareInList,
+          recipeCount,
+        })),
+      );
+    },
+  );
+
+  server.tool(
+    'create_recipe_collection',
+    'Create a new, empty recipe collection for the user. Always creates a new one — check `list_recipe_collections` first so you do not create a second collection with the same name. Returns `{ uuid, name, shareInList }`; file recipes into it with `add_recipe_to_collection` or `collectionIds` of `create_recipe`.',
+    {
+      name: z.string().min(1).describe('Collection name, e.g. "Schnelle Abendessen".'),
+      shareInList: z
+        .boolean()
+        .optional()
+        .describe('Whether members of the user\'s lists see the collection too. Defaults to false.'),
+    },
+    async ({ name, shareInList }) => {
+      const collection = unwrap(
+        await client().POST('/recipe-collection', {
+          body: { name, shareInList: shareInList ?? false },
+        }),
+      ) as { uuid: string; name: string; shareInList: boolean };
+      return text({
+        uuid: collection.uuid,
+        name: collection.name,
+        shareInList: collection.shareInList,
+      });
+    },
+  );
+
+  server.tool(
+    'add_recipe_to_collection',
+    'File a recipe into one recipe collection, keeping its other collections. Adding it to a collection it is already in changes nothing. Works for any recipe the user can see, not only their own. Fails when `collectionId` is not one of `list_recipe_collections`. Returns the names of the recipe\'s collections afterwards. To take it out again use `remove_recipe_from_collection`.',
+    {
+      recipeId: z.string().describe('Recipe uuid.'),
+      collectionId: z.string().describe('Collection uuid from `list_recipe_collections`.'),
+    },
+    async ({ recipeId, collectionId }) => {
+      const collections = await collectionsOfRecipe(recipeId);
+      if (!collections.some((c) => c.uuid === collectionId)) {
+        throw new Error(
+          `Unknown recipe collection ${collectionId}. Call \`list_recipe_collections\` for valid uuids.`,
+        );
+      }
+      const assigned = collections
+        .filter((c) => c.hasRecipe || c.uuid === collectionId)
+        .map((c) => c.uuid);
+      await setRecipeCollections(recipeId, assigned);
+      return text({
+        collections: collections
+          .filter((c) => assigned.includes(c.uuid))
+          .map((c) => c.name),
+      });
+    },
+  );
+
+  server.tool(
+    'remove_recipe_from_collection',
+    'Take a recipe out of one recipe collection, keeping its other collections. The recipe itself stays; to delete it use `delete_recipe`. Removing it from a collection it is not in changes nothing. Returns the names of the recipe\'s collections afterwards.',
+    {
+      recipeId: z.string().describe('Recipe uuid.'),
+      collectionId: z.string().describe('Collection uuid from `list_recipe_collections`.'),
+    },
+    async ({ recipeId, collectionId }) => {
+      const collections = await collectionsOfRecipe(recipeId);
+      const remaining = collections.filter(
+        (c) => c.hasRecipe && c.uuid !== collectionId,
+      );
+      await setRecipeCollections(
+        recipeId,
+        remaining.map((c) => c.uuid),
+      );
+      return text({ collections: remaining.map((c) => c.name) });
     },
   );
 

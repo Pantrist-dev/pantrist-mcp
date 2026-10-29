@@ -12,6 +12,28 @@ const received: {
   body: string;
 }[] = [];
 
+/** Canned answers for the routes the tool tests read from. */
+function respond(method?: string, url?: string, body?: string): unknown {
+  if (url?.endsWith('/supermarkets')) {
+    return [{ uid: 'coop', name: 'Coop', geofenceLat: 47.01, iconId: 'store' }];
+  }
+  if (url === '/user-management/me') return { uid: 'u1', email: 'a@b.c' };
+  if (url?.startsWith('/recipe-collection/with-connected-recipe/')) {
+    return [
+      { uuid: 'c1', name: 'Abendessen', shareInList: false, hasRecipe: true },
+      { uuid: 'c2', name: 'Curry', shareInList: true, hasRecipe: false },
+    ];
+  }
+  if (method === 'GET' && url?.startsWith('/recipe-collection')) {
+    return [
+      { uuid: 'c1', name: 'Abendessen', shareInList: false, connectedRecipeImages: ['x.jpg'], recipeCount: 3 },
+      { uuid: 'c2', name: 'Curry', shareInList: true, connectedRecipeImages: [], recipeCount: 0 },
+    ];
+  }
+  if (method === 'POST' && url === '/recipe') return JSON.parse(body ?? '{}');
+  return { ok: true };
+}
+
 const echo = http.createServer((req, res) => {
   let body = '';
   req.on('data', (d) => (body += d));
@@ -23,13 +45,7 @@ const echo = http.createServer((req, res) => {
       body,
     });
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(
-      JSON.stringify(
-        req.url?.endsWith('/supermarkets')
-          ? [{ uid: 'coop', name: 'Coop', geofenceLat: 47.01, iconId: 'store' }]
-          : { ok: true },
-      ),
-    );
+    res.end(JSON.stringify(respond(req.method, req.url, body)));
   });
 });
 echo.listen(0);
@@ -185,7 +201,8 @@ test('currentUser() refuses to call the API without a token', async () => {
 
 // The tool handlers themselves, through the server they are registered on.
 const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
-const { registerTools, applyPantryItemChanges } = await import('./tools.js');
+const { registerTools, applyPantryItemChanges, applyRecipeChanges } =
+  await import('./tools.js');
 const toolServer = new McpServer({ name: 'test', version: '0' });
 registerTools(toolServer);
 
@@ -319,4 +336,173 @@ test('update_pantry_item merge: omitted fields round-trip unchanged', () => {
   assert.equal(merged.minimumAmount, 1);
   assert.equal(merged.manageMinimumAmount, false);
   assert.equal(merged.pantrySettings, article.pantrySettings);
+});
+
+// Recipes are saved as a whole, so create_recipe builds a complete recipe
+// and update_recipe sends back a merged copy; these pin down both.
+test('create_recipe merge: a new recipe gets the app defaults and the summed time', () => {
+  const recipe = applyRecipeChanges(
+    undefined,
+    {
+      name: 'Dal',
+      preparationTime: 10,
+      cookingTime: 25,
+      ingredients: [
+        { name: 'Rote Linsen', amount: 200, unit: 'g' },
+        { name: 'Salz', unit: 'Pinch', notes: 'nach Geschmack' },
+      ],
+      steps: ['Linsen waschen.', { text: 'Köcheln lassen.', timerMinutes: 20 }],
+    },
+    'u1',
+  );
+
+  assert.match(recipe.uuid, /^[0-9a-f-]{36}$/);
+  assert.equal(recipe.authorUuid, 'u1');
+  assert.equal(recipe.totalTime, 35);
+  assert.equal(recipe.defaultServings, 4);
+  assert.equal(recipe.servingsUnit, 'Portion');
+  assert.equal(recipe.language, 'de-DE');
+  assert.equal(recipe.shouldBePublic, false);
+  assert.deepEqual(recipe.ingredients, [
+    { name: 'Rote Linsen', contentVolume: 200, volumeUnit: 'g' },
+    { name: 'Salz', contentVolume: 1, volumeUnit: 'Pinch', notes: 'nach Geschmack' },
+  ]);
+  assert.deepEqual(recipe.steps, [
+    { text: 'Linsen waschen.', ingredients: [] },
+    { text: 'Köcheln lassen.', ingredients: [], timerMinutes: 20 },
+  ]);
+});
+
+const savedRecipe = {
+  uuid: 'R7',
+  name: 'Dal',
+  authorUuid: 'u1',
+  totalTime: 35,
+  preparationTime: 10,
+  defaultServings: 4,
+  servingsUnit: 'Portion',
+  shouldBePublic: false,
+  showAuthor: true,
+  language: 'de-DE',
+  categories: ['Vegan'],
+  imageUrl: 'https://img/dal.jpg',
+  favorites: 3,
+  source: { origin: 'manual' },
+  ingredients: [
+    { name: 'Linsen', contentVolume: 200, volumeUnit: 'g', normalizedName: 'linse', ingredientId: 'i1' },
+  ],
+  steps: [{ text: 'Kochen.', ingredients: [], timerMinutes: 20 }],
+} as unknown as Parameters<typeof applyRecipeChanges>[0] & object;
+
+test('update_recipe merge: omitted fields round-trip, read-only ones are left out', () => {
+  const recipe = applyRecipeChanges(savedRecipe, { name: 'Linsen-Dal' }, 'u1');
+
+  assert.equal(recipe.name, 'Linsen-Dal');
+  assert.equal(recipe.uuid, 'R7');
+  assert.equal(recipe.totalTime, 35);
+  assert.equal(recipe.imageUrl, 'https://img/dal.jpg');
+  assert.deepEqual(recipe.categories, ['Vegan']);
+  assert.deepEqual(recipe.steps, savedRecipe.steps);
+  assert.equal('favorites' in recipe, false);
+  assert.equal('source' in recipe, false);
+  assert.deepEqual(recipe.ingredients, [
+    { name: 'Linsen', contentVolume: 200, volumeUnit: 'g' },
+  ]);
+});
+
+test('update_recipe merge: ingredients and steps are replaced, not merged', () => {
+  const recipe = applyRecipeChanges(
+    savedRecipe,
+    { ingredients: [{ name: 'Kichererbsen' }], steps: ['Anbraten.'] },
+    'u1',
+  );
+
+  assert.deepEqual(recipe.ingredients, [
+    { name: 'Kichererbsen', contentVolume: 1, volumeUnit: 'pieces' },
+  ]);
+  assert.deepEqual(recipe.steps, [{ text: 'Anbraten.', ingredients: [] }]);
+  assert.equal(recipe.totalTime, 35);
+});
+
+test('create_recipe saves the recipe as the signed-in user, then files it', async () => {
+  received.length = 0;
+  const result = await callTool('create_recipe', {
+    name: 'Dal',
+    ingredients: [{ name: 'Linsen', amount: 200, unit: 'g' }],
+    steps: ['Kochen.'],
+    collectionIds: ['c2'],
+  });
+
+  assert.deepEqual(
+    received.map((r) => `${r.method} ${r.url}`),
+    [
+      'GET /recipe-collection',
+      'GET /user-management/me',
+      'POST /recipe',
+      `PUT /recipe-collection/recipe/${JSON.parse(received[2].body).uuid}`,
+    ],
+  );
+  assert.equal(JSON.parse(received[2].body).authorUuid, 'u1');
+  assert.deepEqual(JSON.parse(received[3].body), { collectionUuids: ['c2'] });
+  assert.equal(JSON.parse(result.content[0].text).name, 'Dal');
+});
+
+test('create_recipe with an unknown collection fails before saving anything', async () => {
+  received.length = 0;
+  await assert.rejects(
+    callTool('create_recipe', {
+      name: 'Dal',
+      ingredients: [],
+      steps: [],
+      collectionIds: ['nope'],
+    }),
+    /Unknown recipe collection nope/,
+  );
+  assert.deepEqual(
+    received.map((r) => `${r.method} ${r.url}`),
+    ['GET /recipe-collection'],
+  );
+});
+
+test('list_recipe_collections returns uuid, name, sharing and count', async () => {
+  const result = await callTool('list_recipe_collections', {});
+
+  assert.deepEqual(JSON.parse(result.content[0].text), [
+    { uuid: 'c1', name: 'Abendessen', shareInList: false, recipeCount: 3 },
+    { uuid: 'c2', name: 'Curry', shareInList: true, recipeCount: 0 },
+  ]);
+});
+
+test('add_recipe_to_collection keeps the recipe in its other collections', async () => {
+  received.length = 0;
+  const result = await callTool('add_recipe_to_collection', {
+    recipeId: 'R7',
+    collectionId: 'c2',
+  });
+
+  assert.equal(received[1].method, 'PUT');
+  assert.equal(received[1].url, '/recipe-collection/recipe/R7');
+  assert.deepEqual(JSON.parse(received[1].body), { collectionUuids: ['c1', 'c2'] });
+  assert.deepEqual(JSON.parse(result.content[0].text), {
+    collections: ['Abendessen', 'Curry'],
+  });
+});
+
+test('add_recipe_to_collection rejects a collection the user cannot see', async () => {
+  received.length = 0;
+  await assert.rejects(
+    callTool('add_recipe_to_collection', { recipeId: 'R7', collectionId: 'nope' }),
+    /Unknown recipe collection nope/,
+  );
+  assert.equal(received.length, 1);
+});
+
+test('remove_recipe_from_collection keeps the other collections', async () => {
+  received.length = 0;
+  await callTool('remove_recipe_from_collection', {
+    recipeId: 'R7',
+    collectionId: 'c1',
+  });
+
+  assert.deepEqual(JSON.parse(received[1].body), { collectionUuids: [] });
 });
