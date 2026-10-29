@@ -5052,6 +5052,192 @@
         ]
       }
     },
+    "/recipe-collection": {
+      "get": {
+        "description": "Returns the recipe collections the authenticated user may see: their own ones plus the ones shared by other members of their lists. Supports filtering by type and search text.",
+        "operationId": "RecipeCollectionController_getCollections",
+        "parameters": [
+          {
+            "name": "searchText",
+            "required": false,
+            "in": "query",
+            "description": "Search collections by name",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Filter collections by visibility. 'own' returns only the user's own collections, 'shared' only the ones other list members share. Omit to get both.",
+            "schema": {
+              "enum": [
+                "own",
+                "shared"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of recipe collections",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GetRecipeCollectionsWithImagesDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get recipe collections visible to the current user",
+        "tags": [
+          "Recipe Collections"
+        ]
+      },
+      "post": {
+        "operationId": "RecipeCollectionController_createCollection",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddRecipeCollection"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Collection created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddRecipeCollection"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a new recipe collection",
+        "tags": [
+          "Recipe Collections"
+        ]
+      }
+    },
+    "/recipe-collection/with-connected-recipe/{recipeId}": {
+      "get": {
+        "description": "Returns all recipe collections of the authenticated user including a flag whether the given recipe is connected",
+        "operationId": "RecipeCollectionController_getCollectionsWithConnectedRecipe",
+        "parameters": [
+          {
+            "name": "recipeId",
+            "required": true,
+            "in": "path",
+            "description": "Recipe to check",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of recipe collections with flag whether its connected to the recipe",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionWithRecipeFlag"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get recipe collections of the current user with flag for the recipe",
+        "tags": [
+          "Recipe Collections"
+        ]
+      }
+    },
+    "/recipe-collection/recipe/{recipeUuid}": {
+      "put": {
+        "description": "Replaces all collection assignments of a recipe with the provided collection UUIDs.",
+        "operationId": "RecipeCollectionController_updateRecipeCollections",
+        "parameters": [
+          {
+            "name": "recipeUuid",
+            "required": true,
+            "in": "path",
+            "description": "UUID of the recipe",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCollectionAssignmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Recipe collections updated"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Recipe not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update recipe → collection assignments",
+        "tags": [
+          "Recipe Collections"
+        ]
+      }
+    },
     "/unit/me": {
       "get": {
         "operationId": "UnitController_getUnitsForCurrentList",

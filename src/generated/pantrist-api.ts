@@ -1414,6 +1414,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/recipe-collection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get recipe collections visible to the current user
+         * @description Returns the recipe collections the authenticated user may see: their own ones plus the ones shared by other members of their lists. Supports filtering by type and search text.
+         */
+        get: operations["RecipeCollectionController_getCollections"];
+        put?: never;
+        /** Create a new recipe collection */
+        post: operations["RecipeCollectionController_createCollection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recipe-collection/with-connected-recipe/{recipeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get recipe collections of the current user with flag for the recipe
+         * @description Returns all recipe collections of the authenticated user including a flag whether the given recipe is connected
+         */
+        get: operations["RecipeCollectionController_getCollectionsWithConnectedRecipe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recipe-collection/recipe/{recipeUuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update recipe → collection assignments
+         * @description Replaces all collection assignments of a recipe with the provided collection UUIDs.
+         */
+        put: operations["RecipeCollectionController_updateRecipeCollections"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/unit/me": {
         parameters: {
             query?: never;
@@ -6708,6 +6769,138 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecipeCollectionController_getCollections: {
+        parameters: {
+            query?: {
+                /** @description Search collections by name */
+                searchText?: string;
+                /** @description Filter collections by visibility. 'own' returns only the user's own collections, 'shared' only the ones other list members share. Omit to get both. */
+                type?: "own" | "shared";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of recipe collections */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetRecipeCollectionsWithImagesDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecipeCollectionController_createCollection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddRecipeCollection"];
+            };
+        };
+        responses: {
+            /** @description Collection created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddRecipeCollection"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecipeCollectionController_getCollectionsWithConnectedRecipe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Recipe to check */
+                recipeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of recipe collections with flag whether its connected to the recipe */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionWithRecipeFlag"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecipeCollectionController_updateRecipeCollections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description UUID of the recipe */
+                recipeUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCollectionAssignmentDto"];
+            };
+        };
+        responses: {
+            /** @description Recipe collections updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recipe not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
