@@ -4673,6 +4673,258 @@
         ]
       }
     },
+    "/list/{listId}/pantryList/{itemId}/reservations/{recipeUuid}": {
+      "put": {
+        "description": "Sets stock aside in `pantrySettings.savedForRecipe` until the recipe is cooked, replacing this item's earlier reservation for the same recipe. `recipeUuid` is a Pantrist recipe uuid, or an id of the caller's choosing plus a `recipeName` for a recipe that only exists outside of Pantrist.",
+        "operationId": "PantryListItemsController_reserveForRecipe",
+        "parameters": [
+          {
+            "name": "listId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "itemId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recipeUuid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-socket-id",
+            "required": false,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReserveForRecipeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArticleDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reserve stock of a pantry item for a recipe",
+        "tags": [
+          "Pantry List"
+        ]
+      },
+      "delete": {
+        "description": "Nothing is booked out of the stock.",
+        "operationId": "PantryListItemsController_releaseItemReservation",
+        "parameters": [
+          {
+            "name": "listId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "itemId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recipeUuid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-socket-id",
+            "required": false,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ArticleDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Release one pantry item's reservation for a recipe",
+        "tags": [
+          "Pantry List"
+        ]
+      }
+    },
+    "/list/{listId}/pantryList/reservations/{recipeUuid}": {
+      "delete": {
+        "description": "For a recipe that will not be cooked after all. Nothing is booked out of the stock.",
+        "operationId": "PantryListItemsController_releaseRecipeReservation",
+        "parameters": [
+          {
+            "name": "listId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recipeUuid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-socket-id",
+            "required": false,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ArticleDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Release all of a recipe's reservations",
+        "tags": [
+          "Pantry List"
+        ]
+      }
+    },
+    "/list/{listId}/pantryList/reservations/{recipeUuid}/cooked": {
+      "post": {
+        "description": "Books every reservation of the recipe out of its item, the way the app does: open packages first, then whole ones, and a remainder leaves a package open. The reservations are removed. `unbooked` lists reserved content the stock could not cover.",
+        "operationId": "PantryListItemsController_cookRecipeReservation",
+        "parameters": [
+          {
+            "name": "listId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recipeUuid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-socket-id",
+            "required": false,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CookRecipeReservationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CookedRecipeReservationDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Book a cooked recipe out of the pantry",
+        "tags": [
+          "Pantry List"
+        ]
+      }
+    },
     "/list/{listId}/auto-reduce/accrual": {
       "get": {
         "description": "`since` is the caller's baseline. Each item resolves its own window from the point it was last accounted for, so members of a shared list are not asked for a window another member already confirmed. A non-empty result marks exactly the returned items as accounted for as of NOW: the app presents the modal precisely when rows come back, so those items count as seen from here on. Items that are NOT returned keep the consumption they have accrued, which is what the list-wide cursor bump used to destroy.",
@@ -5134,6 +5386,9 @@
           },
           "401": {
             "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Read-only token"
           }
         },
         "security": [
@@ -5222,6 +5477,9 @@
           },
           "401": {
             "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Read-only token"
           },
           "404": {
             "description": "Recipe not found"
@@ -7295,7 +7553,12 @@
         "type": "object",
         "properties": {
           "recipeUuid": {
-            "type": "string"
+            "type": "string",
+            "description": "Groups the reservations of one recipe. A Pantrist recipe uuid, or an id of the caller's choosing for a recipe that only exists outside of Pantrist."
+          },
+          "recipeName": {
+            "type": "string",
+            "description": "Display name for a recipe that only exists outside of Pantrist, where `recipeUuid` has no recipe to look the name up in."
           },
           "amountSaved": {
             "type": "number"
@@ -10241,6 +10504,75 @@
         },
         "required": [
           "barcode"
+        ]
+      },
+      "ReserveForRecipeDto": {
+        "type": "object",
+        "properties": {
+          "recipeName": {
+            "type": "string",
+            "description": "Display name, for a recipe that only exists outside of Pantrist. Leave it out for a Pantrist recipe, whose name is looked up by its uuid."
+          },
+          "amountSaved": {
+            "type": "number",
+            "description": "Whole packages to set aside. Wins over `contentSaved` when cooked."
+          },
+          "contentSaved": {
+            "type": "number",
+            "description": "Content to set aside, in the item's own `unitId` (e.g. 200 g out of a 500 g pack)."
+          }
+        }
+      },
+      "CookRecipeReservationDto": {
+        "type": "object",
+        "properties": {
+          "autoRestock": {
+            "type": "boolean",
+            "default": false,
+            "description": "Add every item that drops to or below its minimum to the shopping list, as on `change-amount`."
+          }
+        }
+      },
+      "UnbookedRecipeContentDto": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "content": {
+            "type": "number",
+            "description": "Reserved content the stock could not cover, in the item's own unit."
+          }
+        },
+        "required": [
+          "itemId",
+          "name",
+          "content"
+        ]
+      },
+      "CookedRecipeReservationDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "The pantry items as they stand after booking.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArticleDto"
+            }
+          },
+          "unbooked": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UnbookedRecipeContentDto"
+            }
+          }
+        },
+        "required": [
+          "items",
+          "unbooked"
         ]
       },
       "AutoReduceCursorDto": {

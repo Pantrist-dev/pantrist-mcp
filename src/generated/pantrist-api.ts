@@ -1277,6 +1277,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/list/{listId}/pantryList/{itemId}/reservations/{recipeUuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reserve stock of a pantry item for a recipe
+         * @description Sets stock aside in `pantrySettings.savedForRecipe` until the recipe is cooked, replacing this item's earlier reservation for the same recipe. `recipeUuid` is a Pantrist recipe uuid, or an id of the caller's choosing plus a `recipeName` for a recipe that only exists outside of Pantrist.
+         */
+        put: operations["PantryListItemsController_reserveForRecipe"];
+        post?: never;
+        /**
+         * Release one pantry item's reservation for a recipe
+         * @description Nothing is booked out of the stock.
+         */
+        delete: operations["PantryListItemsController_releaseItemReservation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/list/{listId}/pantryList/reservations/{recipeUuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Release all of a recipe's reservations
+         * @description For a recipe that will not be cooked after all. Nothing is booked out of the stock.
+         */
+        delete: operations["PantryListItemsController_releaseRecipeReservation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/list/{listId}/pantryList/reservations/{recipeUuid}/cooked": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Book a cooked recipe out of the pantry
+         * @description Books every reservation of the recipe out of its item, the way the app does: open packages first, then whole ones, and a remainder leaves a package open. The reservations are removed. `unbooked` lists reserved content the stock could not cover.
+         */
+        post: operations["PantryListItemsController_cookRecipeReservation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/list/{listId}/auto-reduce/accrual": {
         parameters: {
             query?: never;
@@ -2137,7 +2201,10 @@ export interface components {
             remainingAmount?: number;
         };
         SavedForRecipeDto: {
+            /** @description Groups the reservations of one recipe. A Pantrist recipe uuid, or an id of the caller's choosing for a recipe that only exists outside of Pantrist. */
             recipeUuid: string;
+            /** @description Display name for a recipe that only exists outside of Pantrist, where `recipeUuid` has no recipe to look the name up in. */
+            recipeName?: string;
             amountSaved?: number;
             contentSaved?: number;
         };
@@ -2967,6 +3034,32 @@ export interface components {
             amount: number;
             /** @default pieces */
             unitId: string;
+        };
+        ReserveForRecipeDto: {
+            /** @description Display name, for a recipe that only exists outside of Pantrist. Leave it out for a Pantrist recipe, whose name is looked up by its uuid. */
+            recipeName?: string;
+            /** @description Whole packages to set aside. Wins over `contentSaved` when cooked. */
+            amountSaved?: number;
+            /** @description Content to set aside, in the item's own `unitId` (e.g. 200 g out of a 500 g pack). */
+            contentSaved?: number;
+        };
+        CookRecipeReservationDto: {
+            /**
+             * @description Add every item that drops to or below its minimum to the shopping list, as on `change-amount`.
+             * @default false
+             */
+            autoRestock: boolean;
+        };
+        UnbookedRecipeContentDto: {
+            itemId: string;
+            name: string;
+            /** @description Reserved content the stock could not cover, in the item's own unit. */
+            content: number;
+        };
+        CookedRecipeReservationDto: {
+            /** @description The pantry items as they stand after booking. */
+            items: components["schemas"]["ArticleDto"][];
+            unbooked: components["schemas"]["UnbookedRecipeContentDto"][];
         };
         AutoReduceCursorDto: {
             /** @description ISO timestamp the next accrual window starts from, shared by every member of the list. Null when the modal has never been presented for this list; the app then falls back to its per-user baseline. */
@@ -6517,6 +6610,112 @@ export interface operations {
             };
         };
     };
+    PantryListItemsController_reserveForRecipe: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-socket-id"?: string;
+            };
+            path: {
+                listId: string;
+                itemId: string;
+                recipeUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReserveForRecipeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArticleDto"];
+                };
+            };
+        };
+    };
+    PantryListItemsController_releaseItemReservation: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-socket-id"?: string;
+            };
+            path: {
+                listId: string;
+                itemId: string;
+                recipeUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArticleDto"][];
+                };
+            };
+        };
+    };
+    PantryListItemsController_releaseRecipeReservation: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-socket-id"?: string;
+            };
+            path: {
+                listId: string;
+                recipeUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArticleDto"][];
+                };
+            };
+        };
+    };
+    PantryListItemsController_cookRecipeReservation: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-socket-id"?: string;
+            };
+            path: {
+                listId: string;
+                recipeUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CookRecipeReservationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookedRecipeReservationDto"];
+                };
+            };
+        };
+    };
     AutoReduceController_accrual: {
         parameters: {
             query: {
@@ -6837,6 +7036,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Read-only token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     RecipeCollectionController_getCollectionsWithConnectedRecipe: {
@@ -6894,6 +7100,13 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Read-only token */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
