@@ -232,6 +232,60 @@ export function applyRecipeChanges(
   return body as unknown as RecipeDto;
 }
 
+/** One recipe's reservations across the pantry, as `list_recipe_reservations` shows them. */
+export interface RecipeReservations {
+  recipeId: string;
+  /** Set for a recipe known only by name; else look it up with `get_recipe`. */
+  recipeName?: string;
+  items: {
+    itemId: string;
+    name: string;
+    unitId: string;
+    stock: number;
+    contentVolume: number;
+    amountSaved?: number;
+    contentSaved?: number;
+  }[];
+}
+
+/** Group the pantry's `savedForRecipe` entries by recipe. */
+export function groupReservations(items: ArticleDto[]): RecipeReservations[] {
+  const byRecipe = new Map<string, RecipeReservations>();
+  for (const item of items) {
+    for (const saved of item.pantrySettings?.savedForRecipe ?? []) {
+      const group = byRecipe.get(saved.recipeUuid) ?? {
+        recipeId: saved.recipeUuid,
+        items: [],
+      };
+      if (saved.recipeName) group.recipeName = saved.recipeName;
+      group.items.push({
+        itemId: item.uuid,
+        name: item.name,
+        unitId: item.unitId,
+        stock: item.amount,
+        contentVolume: item.contentVolume,
+        ...(saved.amountSaved ? { amountSaved: saved.amountSaved } : {}),
+        ...(saved.contentSaved ? { contentSaved: saved.contentSaved } : {}),
+      });
+      byRecipe.set(saved.recipeUuid, group);
+    }
+  }
+  return [...byRecipe.values()];
+}
+
+/**
+ * The id a recipe known only by name is reserved under: the one it already
+ * has in this pantry, so a second call adds to the same reservation, or a
+ * fresh one.
+ */
+export function recipeIdForName(items: ArticleDto[], recipeName: string): string {
+  const wanted = recipeName.trim().toLocaleLowerCase();
+  const existing = groupReservations(items).find(
+    (group) => group.recipeName?.trim().toLocaleLowerCase() === wanted,
+  );
+  return existing?.recipeId ?? randomUUID();
+}
+
 /** Wrap any value as an MCP text content result. */
 function text(data: unknown) {
   return {
@@ -563,7 +617,7 @@ export function registerTools(server: McpServer): void {
   // --- pantry --------------------------------------------------------------
   server.tool(
     'list_pantry_items',
-    'List all items currently stocked in the pantry for `listId`. Read-only. Returns an array of `ArticleDto` objects (`uuid`, `name`, `amount` = current stock, `unitId`, `pantrySettings.earliestBestBefore` for expiry tracking, `minimumAmount` (in packages, or in content of `unitId` when `minimumAmountMode` is `content`, e.g. 3 rolls out of packs of 8 with `contentVolume` 8), …); empty array if the pantry is empty. For shopping items use `list_shopping_items`; for stock changes on an existing item use `reduce_pantry_amount`; for metadata changes use `update_pantry_item`.',
+    'List all items currently stocked in the pantry for `listId`. Read-only. Returns an array of `ArticleDto` objects (`uuid`, `name`, `amount` = current stock, `unitId`, `pantrySettings.earliestBestBefore` for expiry tracking, `minimumAmount` (in packages, or in content of `unitId` when `minimumAmountMode` is `content`, e.g. 3 rolls out of packs of 8 with `contentVolume` 8), `pantrySettings.savedForRecipe` = stock already reserved for recipes (see `list_recipe_reservations`), …); empty array if the pantry is empty. For shopping items use `list_shopping_items`; for stock changes on an existing item use `reduce_pantry_amount`; for metadata changes use `update_pantry_item`.',
     { ...listIdArg },
     async ({ listId }) =>
       text(
@@ -741,6 +795,198 @@ export function registerTools(server: McpServer): void {
           }),
         ),
       );
+    },
+  );
+
+  // --- recipe reservations -------------------------------------------------
+  server.tool(
+    'reserve_pantry_for_recipe',
+    'Set pantry stock aside for a recipe that is going to be cooked, so it is not planned twice. Nothing leaves the stock yet: once the recipe is cooked call `cook_recipe`, if it will not be cooked call `release_recipe_reservation`. Works for a Pantrist recipe (`recipeId`) and for one that only exists elsewhere, a website or a cookbook (`recipeName`); the app shows both under "reserved". Reserving an item again for the same recipe replaces its earlier amount. Check `list_pantry_items` (stock, `contentVolume`, existing `pantrySettings.savedForRecipe`) first so you only reserve what is there and not already reserved. Returns the `recipeId` to cook or release it with, and the reserved items.',
+    {
+      recipeId: z
+        .string()
+        .optional()
+        .describe(
+          'Pantrist recipe uuid (from `search_recipes` or `get_recipe`), or the `recipeId` of an earlier reservation (`list_recipe_reservations`). Pass this or `recipeName`.',
+        ),
+      recipeName: z
+        .string()
+        .min(1)
+        .max(200)
+        .optional()
+        .describe(
+          'Name of a recipe that is not in Pantrist, e.g. "Gulasch von Chefkoch". Reservations under the same name in this pantry are added to; otherwise a new `recipeId` is made up. Pass this or `recipeId`.',
+        ),
+      items: z
+        .array(
+          z
+            .object({
+              itemId: z
+                .string()
+                .describe('Pantry item uuid (from `list_pantry_items[].uuid`).'),
+              packages: z
+                .number()
+                .positive()
+                .optional()
+                .describe(
+                  'Whole packages to set aside, for items used whole (2 cans of tomatoes).',
+                ),
+              content: z
+                .number()
+                .positive()
+                .optional()
+                .describe(
+                  "Content to set aside in the item's own `unitId`, for part of a package (200 g out of a 500 g pack). Convert the recipe's unit first.",
+                ),
+            })
+            .refine((item) => item.packages || item.content, {
+              message: 'Give `packages` or `content`.',
+            }),
+        )
+        .min(1)
+        .describe('Pantry items to reserve and how much of each.'),
+      ...listIdArg,
+    },
+    async ({ recipeId, recipeName, items, listId }) => {
+      if (!recipeId === !recipeName) {
+        throw new Error('Pass either `recipeId` or `recipeName`.');
+      }
+      const resolvedListId = resolveListId(listId);
+      const id =
+        recipeId ??
+        recipeIdForName(
+          unwrap(
+            await client().GET('/list/{listId}/pantryList', {
+              params: { path: { listId: resolvedListId } },
+            }),
+          ),
+          recipeName as string,
+        );
+      const reserved = [];
+      for (const { itemId, packages, content } of items) {
+        const article = unwrap(
+          await client().PUT(
+            '/list/{listId}/pantryList/{itemId}/reservations/{recipeUuid}',
+            {
+              params: {
+                path: { listId: resolvedListId, itemId, recipeUuid: id },
+              },
+              body: {
+                ...(recipeName ? { recipeName } : {}),
+                ...(packages ? { amountSaved: packages } : {}),
+                ...(content ? { contentSaved: content } : {}),
+              },
+            },
+          ),
+        );
+        reserved.push({
+          itemId,
+          name: article.name,
+          ...(packages ? { packages } : {}),
+          ...(content ? { content, unitId: article.unitId } : {}),
+        });
+      }
+      return text({
+        recipeId: id,
+        ...(recipeName ? { recipeName } : {}),
+        reserved,
+      });
+    },
+  );
+
+  server.tool(
+    'list_recipe_reservations',
+    'List what pantry stock is set aside for which recipe. Read-only. Returns `[{ recipeId, recipeName?, items: [{ itemId, name, unitId, stock, contentVolume, amountSaved?, contentSaved? }] }]`, empty when nothing is reserved. `recipeName` is set for recipes known only by name; for Pantrist recipes look the name up with `get_recipe`. `amountSaved` counts packages, `contentSaved` content in `unitId`. Use the `recipeId` with `cook_recipe` or `release_recipe_reservation`.',
+    { ...listIdArg },
+    async ({ listId }) =>
+      text(
+        groupReservations(
+          unwrap(
+            await client().GET('/list/{listId}/pantryList', {
+              params: { path: { listId: resolveListId(listId) } },
+            }),
+          ),
+        ),
+      ),
+  );
+
+  server.tool(
+    'cook_recipe',
+    'Book a cooked recipe out of the pantry: every item reserved for it loses what was reserved, the way the app does it (open packages first, then whole ones; a remainder leaves a package open), and the reservations are removed. Only for stock reserved with `reserve_pantry_for_recipe`; for anything else use `reduce_pantry_amount`. Returns `{ items, unbooked }`: the items as they stand afterwards, and reserved content the stock could no longer cover (worth mentioning to the user). Fails with 404 when nothing is reserved for the recipe.',
+    {
+      recipeId: z
+        .string()
+        .describe('`recipeId` from `reserve_pantry_for_recipe` or `list_recipe_reservations`.'),
+      autoRestock: z
+        .boolean()
+        .optional()
+        .describe(
+          'If true, every item that ends at or below its minimum is also added to the shopping list, as with `reduce_pantry_amount`. Defaults to false.',
+        ),
+      ...listIdArg,
+    },
+    async ({ recipeId, autoRestock, listId }) => {
+      const result = unwrap(
+        await client().POST(
+          '/list/{listId}/pantryList/reservations/{recipeUuid}/cooked',
+          {
+            params: {
+              path: { listId: resolveListId(listId), recipeUuid: recipeId },
+            },
+            body: { autoRestock: autoRestock ?? false },
+          },
+        ),
+      );
+      return text({
+        items: result.items.map((item) => ({
+          itemId: item.uuid,
+          name: item.name,
+          stock: item.amount,
+          unitId: item.unitId,
+          contentVolume: item.contentVolume,
+        })),
+        unbooked: result.unbooked,
+      });
+    },
+  );
+
+  server.tool(
+    'release_recipe_reservation',
+    'Drop the reservations of a recipe that will not be cooked after all, from every item or only from `itemId`. The stock is left as it is; to book a cooked recipe out use `cook_recipe`. Returns the names of the items that were released.',
+    {
+      recipeId: z
+        .string()
+        .describe('`recipeId` from `reserve_pantry_for_recipe` or `list_recipe_reservations`.'),
+      itemId: z
+        .string()
+        .optional()
+        .describe('Release only this pantry item. Omit to release the whole recipe.'),
+      ...listIdArg,
+    },
+    async ({ recipeId, itemId, listId }) => {
+      const resolvedListId = resolveListId(listId);
+      const released = itemId
+        ? unwrap(
+            await client().DELETE(
+              '/list/{listId}/pantryList/{itemId}/reservations/{recipeUuid}',
+              {
+                params: {
+                  path: { listId: resolvedListId, itemId, recipeUuid: recipeId },
+                },
+              },
+            ),
+          )
+        : unwrap(
+            await client().DELETE(
+              '/list/{listId}/pantryList/reservations/{recipeUuid}',
+              {
+                params: {
+                  path: { listId: resolvedListId, recipeUuid: recipeId },
+                },
+              },
+            ),
+          );
+      return text({ released: released.map((item) => item.name) });
     },
   );
 

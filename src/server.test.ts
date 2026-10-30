@@ -12,6 +12,43 @@ const received: {
   body: string;
 }[] = [];
 
+/** A pantry with one recipe-known-by-name and one Pantrist recipe reserved. */
+const pantry = [
+  {
+    uuid: 'paprika',
+    name: 'Paprika',
+    unitId: 'g',
+    amount: 2,
+    contentVolume: 50,
+    pantrySettings: {
+      articleList: [],
+      savedForRecipe: [
+        { recipeUuid: 'ext-1', recipeName: 'Gulasch', contentSaved: 7 },
+        { recipeUuid: 'R7', amountSaved: 1 },
+      ],
+    },
+  },
+  {
+    uuid: 'rice',
+    name: 'Reis',
+    unitId: 'g',
+    amount: 1,
+    contentVolume: 1000,
+    pantrySettings: {
+      articleList: [],
+      savedForRecipe: [{ recipeUuid: 'R7', contentSaved: 300 }],
+    },
+  },
+  {
+    uuid: 'salt',
+    name: 'Salz',
+    unitId: 'g',
+    amount: 1,
+    contentVolume: 500,
+    pantrySettings: { articleList: [] },
+  },
+];
+
 /** Canned answers for the routes the tool tests read from. */
 function respond(method?: string, url?: string, body?: string): unknown {
   if (url?.endsWith('/supermarkets')) {
@@ -31,6 +68,18 @@ function respond(method?: string, url?: string, body?: string): unknown {
     ];
   }
   if (method === 'POST' && url === '/recipe') return JSON.parse(body ?? '{}');
+  if (method === 'GET' && url === '/list/L9/pantryList') return pantry;
+  if (method === 'PUT' && url?.includes('/reservations/')) {
+    const itemId = url.split('/')[4];
+    return pantry.find((item) => item.uuid === itemId);
+  }
+  if (method === 'POST' && url?.endsWith('/cooked')) {
+    return {
+      items: [{ ...pantry[0], amount: 1 }],
+      unbooked: [{ itemId: 'paprika', name: 'Paprika', content: 10 }],
+    };
+  }
+  if (method === 'DELETE' && url?.includes('/reservations/')) return [pantry[0]];
   return { ok: true };
 }
 
@@ -201,8 +250,13 @@ test('currentUser() refuses to call the API without a token', async () => {
 
 // The tool handlers themselves, through the server they are registered on.
 const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
-const { registerTools, applyPantryItemChanges, applyRecipeChanges } =
-  await import('./tools.js');
+const {
+  registerTools,
+  applyPantryItemChanges,
+  applyRecipeChanges,
+  groupReservations,
+  recipeIdForName,
+} = await import('./tools.js');
 const toolServer = new McpServer({ name: 'test', version: '0' });
 registerTools(toolServer);
 
@@ -505,4 +559,120 @@ test('remove_recipe_from_collection keeps the other collections', async () => {
   });
 
   assert.deepEqual(JSON.parse(received[1].body), { collectionUuids: [] });
+});
+
+type PantryItems = Parameters<typeof groupReservations>[0];
+
+test('groupReservations groups the pantry by recipe', () => {
+  assert.deepEqual(groupReservations(pantry as unknown as PantryItems), [
+    {
+      recipeId: 'ext-1',
+      recipeName: 'Gulasch',
+      items: [
+        { itemId: 'paprika', name: 'Paprika', unitId: 'g', stock: 2, contentVolume: 50, contentSaved: 7 },
+      ],
+    },
+    {
+      recipeId: 'R7',
+      items: [
+        { itemId: 'paprika', name: 'Paprika', unitId: 'g', stock: 2, contentVolume: 50, amountSaved: 1 },
+        { itemId: 'rice', name: 'Reis', unitId: 'g', stock: 1, contentVolume: 1000, contentSaved: 300 },
+      ],
+    },
+  ]);
+});
+
+test('recipeIdForName reuses the id a name is already reserved under', () => {
+  const items = pantry as unknown as PantryItems;
+  assert.equal(recipeIdForName(items, ' gulasch '), 'ext-1');
+  const fresh = recipeIdForName(items, 'Linsensuppe');
+  assert.notEqual(fresh, 'ext-1');
+  assert.match(fresh, /^[0-9a-f-]{36}$/);
+});
+
+test('reserve_pantry_for_recipe by name reserves every item under one id', async () => {
+  received.length = 0;
+  const result = await callTool('reserve_pantry_for_recipe', {
+    recipeName: 'Gulasch',
+    items: [
+      { itemId: 'paprika', content: 10 },
+      { itemId: 'salt', packages: 1 },
+    ],
+    listId: 'L9',
+  });
+
+  assert.deepEqual(
+    received.map((r) => `${r.method} ${r.url}`),
+    [
+      'GET /list/L9/pantryList',
+      'PUT /list/L9/pantryList/paprika/reservations/ext-1',
+      'PUT /list/L9/pantryList/salt/reservations/ext-1',
+    ],
+  );
+  assert.deepEqual(JSON.parse(received[1].body), { recipeName: 'Gulasch', contentSaved: 10 });
+  assert.deepEqual(JSON.parse(received[2].body), { recipeName: 'Gulasch', amountSaved: 1 });
+  assert.deepEqual(JSON.parse(result.content[0].text), {
+    recipeId: 'ext-1',
+    recipeName: 'Gulasch',
+    reserved: [
+      { itemId: 'paprika', name: 'Paprika', content: 10, unitId: 'g' },
+      { itemId: 'salt', name: 'Salz', packages: 1 },
+    ],
+  });
+});
+
+test('reserve_pantry_for_recipe by recipeId skips the pantry lookup', async () => {
+  received.length = 0;
+  await callTool('reserve_pantry_for_recipe', {
+    recipeId: 'R7',
+    items: [{ itemId: 'rice', content: 300 }],
+    listId: 'L9',
+  });
+
+  assert.deepEqual(
+    received.map((r) => `${r.method} ${r.url}`),
+    ['PUT /list/L9/pantryList/rice/reservations/R7'],
+  );
+  assert.deepEqual(JSON.parse(received[0].body), { contentSaved: 300 });
+});
+
+test('reserve_pantry_for_recipe wants exactly one of recipeId and recipeName', async () => {
+  received.length = 0;
+  await assert.rejects(
+    callTool('reserve_pantry_for_recipe', {
+      recipeId: 'R7',
+      recipeName: 'Dal',
+      items: [{ itemId: 'rice', content: 1 }],
+      listId: 'L9',
+    }),
+    /either `recipeId` or `recipeName`/,
+  );
+  assert.equal(received.length, 0);
+});
+
+test('cook_recipe books the reservation and reports what was not covered', async () => {
+  received.length = 0;
+  const result = await callTool('cook_recipe', { recipeId: 'ext-1', listId: 'L9' });
+
+  assert.equal(received[0].method, 'POST');
+  assert.equal(received[0].url, '/list/L9/pantryList/reservations/ext-1/cooked');
+  assert.deepEqual(JSON.parse(received[0].body), { autoRestock: false });
+  assert.deepEqual(JSON.parse(result.content[0].text), {
+    items: [{ itemId: 'paprika', name: 'Paprika', stock: 1, unitId: 'g', contentVolume: 50 }],
+    unbooked: [{ itemId: 'paprika', name: 'Paprika', content: 10 }],
+  });
+});
+
+test('release_recipe_reservation releases one item or the whole recipe', async () => {
+  received.length = 0;
+  await callTool('release_recipe_reservation', { recipeId: 'R7', itemId: 'rice', listId: 'L9' });
+  await callTool('release_recipe_reservation', { recipeId: 'R7', listId: 'L9' });
+
+  assert.deepEqual(
+    received.map((r) => `${r.method} ${r.url}`),
+    [
+      'DELETE /list/L9/pantryList/rice/reservations/R7',
+      'DELETE /list/L9/pantryList/reservations/R7',
+    ],
+  );
 });

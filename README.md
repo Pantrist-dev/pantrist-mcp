@@ -190,6 +190,10 @@ forwards it.
 | `add_pantry_item` | `POST /list/{listId}/pantryList/add-by-name` |
 | `reduce_pantry_amount` | `PUT /list/{listId}/pantryList/{itemId}/change-amount` |
 | `update_pantry_item` | `GET` + `PUT /list/{listId}/pantryList/{itemId}` (metadata-only; stock changes go through `reduce_pantry_amount`) |
+| `reserve_pantry_for_recipe` | `PUT /list/{listId}/pantryList/{itemId}/reservations/{recipeUuid}` (+ `GET /list/{listId}/pantryList` with `recipeName`) |
+| `list_recipe_reservations` | `GET /list/{listId}/pantryList` |
+| `cook_recipe` | `POST /list/{listId}/pantryList/reservations/{recipeUuid}/cooked` |
+| `release_recipe_reservation` | `DELETE /list/{listId}/pantryList/{itemId}/reservations/{recipeUuid}` or `DELETE /list/{listId}/pantryList/reservations/{recipeUuid}` |
 | `search_recipes` | `POST /recipe/filter` |
 | `get_recipe` | `GET /recipe/{recipeId}` |
 | `delete_recipe` | `DELETE /recipe/{recipeId}` |
