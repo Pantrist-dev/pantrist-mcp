@@ -1,7 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { client, currentUser, resolveListId, unwrap } from './api.js';
+import {
+  BASE,
+  PantristApiError,
+  client,
+  currentUser,
+  request,
+  resolveListId,
+  tokenFingerprint,
+  unwrap,
+} from './api.js';
 import type { components } from './generated/pantrist-api.js';
 
 type ArticleDto = components['schemas']['ArticleDto'];
@@ -134,6 +143,8 @@ export interface RecipeChanges {
   steps?: StepInput[];
   link?: string | null;
   shouldBePublic?: boolean;
+  /** A URL in Pantrist's own file store, see `storeRecipeImage`. */
+  imageUrl?: string | null;
 }
 
 /**
@@ -469,6 +480,359 @@ async function collectionsOfRecipe(recipeId: string) {
   );
 }
 
+/** Where a recipe image comes from: a URL to copy, or the bytes themselves. */
+export type RecipeImageSource =
+  | { url: string }
+  | { base64: string; mimeType: string };
+
+/**
+ * Whether `url` already points into Pantrist's own file store, e.g. the
+ * `imageUrl` of another recipe. Copying it again would only fetch our own
+ * file back.
+ */
+export function isPantristFileUrl(url: string): boolean {
+  return url.startsWith(`${BASE}/files?`) || url.startsWith('https://api.pantrist.app/files?');
+}
+
+/**
+ * Store a recipe image in Pantrist's file store and return the URL to put
+ * into `imageUrl`. The API fetches a URL itself, behind its SSRF guard, and
+ * re-encodes the image like an upload from the app, so the recipe never
+ * hotlinks someone else's CDN. A failed image is a warning, never a reason
+ * to lose the recipe: callers save without it and pass the warning on.
+ */
+async function storeRecipeImage(
+  recipeUuid: string,
+  source: RecipeImageSource,
+): Promise<{ imageUrl: string } | { warning: string }> {
+  if ('url' in source && isPantristFileUrl(source.url)) {
+    return { imageUrl: source.url };
+  }
+  try {
+    const { imageUrl } = await request<{ key: string; imageUrl: string }>(
+      'POST',
+      `/files/recipe-image?recipeUuid=${encodeURIComponent(recipeUuid)}`,
+      source,
+    );
+    return { imageUrl };
+  } catch (error) {
+    return { warning: imageWarning(error) };
+  }
+}
+
+/** `image_fetch_failed: <reason>`, the reason as specific as the API told it. */
+function imageWarning(error: unknown): string {
+  if (error instanceof PantristApiError) {
+    const message = error.apiMessage;
+    return message.startsWith('image_fetch_failed')
+      ? message
+      : `image_fetch_failed: http_${error.status} ${message}`;
+  }
+  return `image_fetch_failed: ${error instanceof Error ? error.message : String(error)}`;
+}
+
+/**
+ * Save a new recipe, then its image, then its collections. The image needs
+ * the saved recipe (the API only stores images for recipes the caller
+ * owns), so it costs a second save that sets `imageUrl`.
+ */
+async function saveNewRecipe(
+  body: RecipeDto,
+  image: RecipeImageSource | undefined,
+  collectionIds: string[] | undefined,
+): Promise<{ recipe: RecipeDto; warnings: string[] }> {
+  const warnings: string[] = [];
+  let recipe = unwrap(await client().POST('/recipe', { body }));
+  if (image) {
+    const stored = await storeRecipeImage(recipe.uuid, image);
+    if ('warning' in stored) {
+      warnings.push(stored.warning);
+    } else {
+      recipe = unwrap(
+        await client().PUT('/recipe', {
+          body: applyRecipeChanges(recipe, { imageUrl: stored.imageUrl }, recipe.authorUuid),
+        }),
+      );
+    }
+  }
+  if (collectionIds?.length) {
+    await setRecipeCollections(recipe.uuid, collectionIds);
+  }
+  return { recipe, warnings };
+}
+
+/** The recipe image `create_recipe` / `update_recipe` were given, if any. */
+function imageSourceOf(args: {
+  imageUrl?: string | null;
+  imageBase64?: string;
+  mimeType?: string;
+}): RecipeImageSource | undefined {
+  if (args.imageUrl && args.imageBase64) {
+    throw new Error('Pass either imageUrl or imageBase64, not both.');
+  }
+  if (args.imageBase64) {
+    if (!args.mimeType) throw new Error('imageBase64 needs mimeType.');
+    return { base64: args.imageBase64, mimeType: args.mimeType };
+  }
+  return args.imageUrl ? { url: args.imageUrl } : undefined;
+}
+
+const recipeImageArgs = {
+  imageUrl: z
+    .string()
+    .url()
+    .nullable()
+    .optional()
+    .describe(
+      'Cover image as an http(s) URL. The server copies it into Pantrist\'s own storage (no hotlinking), scaled like an upload from the app. Max 10 MB, must be an image. On update pass null to remove the image. A failed image never blocks the recipe: it is saved without it and the answer carries `warnings: ["image_fetch_failed: <reason>"]`.',
+    ),
+  imageBase64: z
+    .string()
+    .max(2_800_000)
+    .optional()
+    .describe('Cover image as base64 instead of `imageUrl`, max ~2 MB decoded. Needs `mimeType`.'),
+  mimeType: z
+    .enum(['image/jpeg', 'image/png', 'image/webp'])
+    .optional()
+    .describe('MIME type of `imageBase64`.'),
+};
+
+/** A recipe as the parse returns it: a `RecipeDto` without uuid, plus the cover image. */
+type ParsedRecipe = Omit<RecipeDto, 'uuid'> & {
+  uuid?: string;
+  imageBase64?: string;
+  imageMimeType?: string;
+};
+
+/** Where the parse took its content from, as `POST /parse-recipe/collection` reports it. */
+export interface ParseSources {
+  caption?: string;
+  /** Absent only on a cached parse from before the API reported it. */
+  usedCaption?: boolean;
+  usedNarration?: boolean;
+  transcript?: string;
+  usedImages: boolean;
+  imageTexts?: string[];
+}
+
+interface ParseCollectionResult {
+  recipes: ParsedRecipe[];
+  sourceCount: number;
+  skippedCount: number;
+  sources?: ParseSources;
+}
+
+/** What the import tools report: drafts or saved recipes, the raw sources, warnings. */
+interface ImportResult {
+  recipes: unknown[];
+  sources?: ParseSources;
+  warnings: string[];
+}
+
+/**
+ * Parse results kept for the save that follows a dry run, so reviewing a
+ * draft first does not cost a second AI use, a second slot of the parse
+ * route's rate limit, and another 10–60 s. Per token, in this process only:
+ * with several replicas a save that lands elsewhere simply parses again.
+ */
+const PARSE_CACHE_TTL_MS = 30 * 60_000;
+const PARSE_CACHE_MAX_ENTRIES = 100;
+const parseCache = new Map<string, { result: ParseCollectionResult; expires: number }>();
+
+/** Test helper: forget every cached parse. */
+export function clearParseCache(): void {
+  parseCache.clear();
+}
+
+/**
+ * Parse a post or page with the same route the app's import uses. Errors
+ * come back as one of the codes the import tools document, so a batch can
+ * tell "skip this one" from "wait and retry".
+ */
+async function parseForImport(
+  body: Record<string, unknown>,
+  { dryRun }: { dryRun: boolean },
+): Promise<ParseCollectionResult> {
+  const key = `${tokenFingerprint()} ${JSON.stringify(body)}`;
+  const cached = parseCache.get(key);
+  if (cached && cached.expires > Date.now()) {
+    // A save consumes the draft it was reviewed from; a later import of the
+    // same source parses afresh.
+    if (!dryRun) parseCache.delete(key);
+    return cached.result;
+  }
+  let result: ParseCollectionResult;
+  try {
+    result = await request<ParseCollectionResult>('POST', '/parse-recipe/collection', {
+      ...body,
+      includeSources: true,
+    });
+  } catch (error) {
+    throw importError(error);
+  }
+  if (dryRun) {
+    for (const [k, entry] of parseCache) {
+      if (entry.expires <= Date.now()) parseCache.delete(k);
+    }
+    if (parseCache.size >= PARSE_CACHE_MAX_ENTRIES) {
+      parseCache.delete(parseCache.keys().next().value!);
+    }
+    parseCache.set(key, { result, expires: Date.now() + PARSE_CACHE_TTL_MS });
+  }
+  return result;
+}
+
+/** Map an API error of the parse route onto the import tools' error codes. */
+export function importError(error: unknown): Error {
+  if (!(error instanceof PantristApiError)) return error as Error;
+  const message = error.apiMessage;
+  let code: string;
+  if (error.status === 429) code = 'rate_limited';
+  else if (error.code === 'AI_QUOTA_EXHAUSTED') code = 'ai_quota_exhausted';
+  else if (error.code === 'AI_ACCOUNT_REQUIRED') code = 'account_required';
+  else if (message.startsWith('image_fetch_failed')) code = 'fetch_failed';
+  else if (error.status === 400 || error.status === 422) code = 'unsupported_url';
+  else code = 'fetch_failed';
+  const retry = error.retryAfter !== undefined ? ` retryAfter=${error.retryAfter}s` : '';
+  return new Error(`${code}:${retry} ${message} (HTTP ${error.status})`);
+}
+
+/**
+ * The drafts of a dry run: what would be saved, without the image bytes,
+ * which would flood the model's context. `hasImage` says whether a cover
+ * image would come along.
+ */
+export function toDraft({ imageBase64, imageMimeType: _m, ...recipe }: ParsedRecipe) {
+  return { ...recipe, hasImage: Boolean(imageBase64) };
+}
+
+/**
+ * Turn a parsed recipe into the body of a new save: a fresh uuid, the
+ * signed-in user as author, the caller's language and visibility, and the
+ * link of the post it came from.
+ */
+export function parsedToNewRecipe(
+  parsed: ParsedRecipe,
+  options: { authorUuid: string; language: string; shouldBePublic: boolean; link?: string },
+): RecipeDto {
+  const { imageBase64: _b, imageMimeType: _m, ...recipe } = parsed;
+  const draft = {
+    ...recipe,
+    uuid: randomUUID(),
+    authorUuid: options.authorUuid,
+    language: options.language,
+    shouldBePublic: options.shouldBePublic,
+    showAuthor: recipe.showAuthor ?? true,
+    link: recipe.link || options.link,
+    ingredients: recipe.ingredients ?? [],
+    steps: recipe.steps ?? [],
+    categories: recipe.categories ?? [],
+  } as RecipeDto;
+  const body = applyRecipeChanges(draft, {}, options.authorUuid);
+  // The save derives origin, platform and originalUrl from `link`, but the
+  // author handle only the parse saw, so its source block goes along.
+  if (recipe.source) body.source = recipe.source;
+  return body;
+}
+
+/**
+ * Save every recipe of a parse. Each one gets its own image and its own
+ * warnings; one failing recipe does not stop the others, so a post with
+ * five recipes keeps the four that saved.
+ */
+async function saveParsedRecipes(
+  parsed: ParsedRecipe[],
+  options: {
+    language: string;
+    shouldBePublic: boolean;
+    link?: string;
+    collectionIds?: string[];
+    /** Overrides the image the parse picked, e.g. a chosen carousel slide. */
+    image?: RecipeImageSource;
+  },
+): Promise<{ recipes: RecipeDto[]; warnings: string[] }> {
+  const user = await currentUser();
+  if (!user) throw new Error('No Pantrist account is linked to this connection.');
+  const recipes: RecipeDto[] = [];
+  const warnings: string[] = [];
+  for (const [index, item] of parsed.entries()) {
+    const image =
+      options.image ??
+      (item.imageBase64
+        ? { base64: item.imageBase64, mimeType: item.imageMimeType ?? 'image/jpeg' }
+        : undefined);
+    try {
+      const saved = await saveNewRecipe(
+        parsedToNewRecipe(item, { ...options, authorUuid: user.uid }),
+        image,
+        options.collectionIds,
+      );
+      recipes.push(saved.recipe);
+      warnings.push(...saved.warnings.map((w) => `recipe ${index} (${item.name}): ${w}`));
+    } catch (error) {
+      warnings.push(
+        `save_failed: recipe ${index} (${item.name}): ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+  return { recipes, warnings };
+}
+
+/** The import tools' shared ending: drafts on a dry run, else save and report. */
+async function finishImport(
+  result: ParseCollectionResult,
+  options: {
+    dryRun: boolean;
+    language: string;
+    shouldBePublic: boolean;
+    link?: string;
+    collectionIds?: string[];
+    image?: RecipeImageSource;
+  },
+): Promise<ImportResult> {
+  const warnings: string[] = [];
+  if (result.skippedCount > 0) {
+    warnings.push(
+      `skipped: ${result.skippedCount} of ${result.sourceCount} recipe candidates exceed the per-import cap and were not parsed`,
+    );
+  }
+  if (result.recipes.length === 0) {
+    // Not thrown: the raw sources are what tells the caller why.
+    return {
+      recipes: [],
+      sources: result.sources,
+      warnings: [...warnings, 'no_recipe_found: the source holds no recipe the parser could read'],
+    };
+  }
+  if (options.dryRun) {
+    return { recipes: result.recipes.map(toDraft), sources: result.sources, warnings };
+  }
+  const saved = await saveParsedRecipes(result.recipes, options);
+  return {
+    recipes: saved.recipes,
+    sources: result.sources,
+    warnings: [...warnings, ...saved.warnings],
+  };
+}
+
+const importLanguage = z
+  .enum(RECIPE_LANGUAGES)
+  .optional()
+  .describe('Language the recipe is translated into and saved as. Defaults to "de-DE".');
+
+const importRateLimit =
+  'Cost and limits: every parse is one AI use — unlimited with Pantrist Premium, otherwise a few per month (check `get_ai_quota` before a batch); `ai_quota_exhausted` means none are left this month. A save right after a dry run of the same arguments reuses that parse (for 30 minutes) and costs nothing extra. The parse route allows 10 calls per minute (counted per connection IP, shared by everyone on this MCP server): pace a batch to about one call every 7 seconds and wait `retryAfter` seconds on `rate_limited`.';
+
+/** Your own recipes per normalized link, from `POST /recipe/by-links`. */
+async function recipesByLinks(links: string[]): Promise<Record<string, string[]>> {
+  const { matches } = await request<{ matches: Record<string, string[]> }>(
+    'POST',
+    '/recipe/by-links',
+    { links },
+  );
+  return matches;
+}
+
 const listIdArg = {
   listId: z
     .string()
@@ -510,6 +874,13 @@ export function registerTools(server: McpServer): void {
         uid: user.uid,
       });
     },
+  );
+
+  server.tool(
+    'get_ai_quota',
+    'Show how many AI features the user may still start this month. Read-only. Recipe imports (`import_recipe_from_url`, `import_recipe_from_images`) cost one use each. Returns `{ unlimited, limit, used, remaining }`: `unlimited: true` with Pantrist Premium (then `remaining` is 0 and means nothing), otherwise `remaining` of the monthly `limit`. Check it before a batch import.',
+    {},
+    async () => text(await request('GET', '/ai-quota')),
   );
 
   // --- shopping list -------------------------------------------------------
@@ -993,7 +1364,7 @@ export function registerTools(server: McpServer): void {
   // --- recipes -------------------------------------------------------------
   server.tool(
     'search_recipes',
-    'Search the user\'s recipes (their own creations + public favourites) by free-text and optional category filters. Read-only and paginated — returns `{ results: RecipeDto[], totalCount, totalPages, currentPage }`. To fetch a single recipe by uuid use `get_recipe`; to delete one you own use `delete_recipe`.',
+    'Search recipes by free-text and optional category filters. By default this covers the user\'s own recipes, recipes shared through their lists AND public recipes of other users; pass `ownOnly: true` to see only recipes the user authored — use that before creating one, to tell whether it is already theirs. Read-only and paginated — returns an array of up to 10 `RecipeDto`s per page; a page with fewer than 10 is the last one. To check many source links for duplicates at once use `find_recipes_by_link`; to fetch a single recipe by uuid use `get_recipe`.',
     {
       searchString: z
         .string()
@@ -1007,23 +1378,49 @@ export function registerTools(server: McpServer): void {
         .describe(
           'Optional category filter — multiple categories are OR-combined. Values must come from the recipe-categories enum (e.g. "Breakfast", "Vegetarian", "LowCarb").',
         ),
+      ownOnly: z
+        .boolean()
+        .optional()
+        .describe('Only recipes the signed-in user authored. Defaults to false.'),
       currentPage: z
         .number()
         .int()
         .min(1)
         .optional()
         .describe(
-          '1-based page index. Page size is fixed server-side. Defaults to 1.',
+          '1-based page index; 10 recipes per page. Defaults to 1.',
         ),
     },
-    async ({ searchString, categories, currentPage }) =>
-      text(
+    async ({ searchString, categories, ownOnly, currentPage }) => {
+      let authorUuid: string | undefined;
+      if (ownOnly) {
+        const user = await currentUser();
+        if (!user) throw new Error('No Pantrist account is linked to this connection.');
+        authorUuid = user.uid;
+      }
+      return text(
         unwrap(
-          await client().POST('/recipe/filter', {
-            body: { searchString, categories, currentPage },
+          // The legacy `/recipe/filter` answers a growing window (page N
+          // returns rows 1..N*10); this one returns page N alone.
+          await client().POST('/recipe/filter/paginated', {
+            body: { searchString, categories, currentPage, authorUuid },
           }),
         ),
-      ),
+      );
+    },
+  );
+
+  server.tool(
+    'find_recipes_by_link',
+    'Check which source links are already among the user\'s OWN recipes, for de-duplicating an import before it runs. Matches a recipe\'s `link` and its `source.originalUrl`, both normalized: tracking parameters (`igsh`, `utm_*`, `si`, …), `www.`, the fragment and a trailing slash are ignored. Read-only, one API call for up to 500 links. Returns `{ [url]: recipeUuid[] }` keyed by each url exactly as passed; `[]` means not imported yet.',
+    {
+      urls: z
+        .array(z.string().min(1).max(2000))
+        .min(1)
+        .max(500)
+        .describe('Post or recipe URLs to look up, up to 500 per call.'),
+    },
+    async ({ urls }) => text(await recipesByLinks(urls)),
   );
 
   server.tool(
@@ -1068,39 +1465,40 @@ export function registerTools(server: McpServer): void {
 
   server.tool(
     'create_recipe',
-    'Create a new recipe owned by the signed-in user and optionally file it into recipe collections. Always creates a new recipe, even when one with the same name exists — call `search_recipes` first if the recipe might already be there, and change an existing one with `update_recipe` instead. Ingredient names are resolved against the shared ingredient catalog (for matching with the pantry); this creates no articles in the shopping or pantry catalog. Recipes belong to the user, not to a list, so there is no `listId`. Images can only be added in the app. Returns the saved `RecipeDto`, the same shape as `get_recipe`; its `uuid` is the `recipeId` for follow-up calls.',
+    'Create a new recipe owned by the signed-in user and optionally file it into recipe collections. Always creates a new recipe, even when one with the same name exists — call `search_recipes` with `ownOnly: true` (or `find_recipes_by_link` for an imported post) first if the recipe might already be there, and change an existing one with `update_recipe` instead. To import a post or web page, prefer `import_recipe_from_url`, which records the author and platform. Ingredient names are resolved against the shared ingredient catalog (for matching with the pantry); this creates no articles in the shopping or pantry catalog. Recipes belong to the user, not to a list, so there is no `listId`. Returns the saved `RecipeDto`, the same shape as `get_recipe`; its `uuid` is the `recipeId` for follow-up calls. When the image could not be stored, the answer also carries `warnings`.',
     {
       ...recipeFieldArgs,
+      ...recipeImageArgs,
       name: recipeName,
       ingredients: recipeIngredients,
       steps: recipeSteps,
     },
-    async ({ collectionIds, ...changes }) => {
+    async ({ collectionIds, imageUrl, imageBase64, mimeType, ...changes }) => {
+      const image = imageSourceOf({ imageUrl, imageBase64, mimeType });
       if (collectionIds) await assertCollectionsExist(collectionIds);
       const user = await currentUser();
       if (!user) throw new Error('No Pantrist account is linked to this connection.');
-      const recipe = unwrap(
-        await client().POST('/recipe', {
-          body: applyRecipeChanges(undefined, changes, user.uid),
-        }),
+      const { recipe, warnings } = await saveNewRecipe(
+        applyRecipeChanges(undefined, changes, user.uid),
+        image,
+        collectionIds,
       );
-      if (collectionIds?.length) {
-        await setRecipeCollections(recipe.uuid, collectionIds);
-      }
-      return text(recipe);
+      return text(warnings.length ? { ...recipe, warnings } : recipe);
     },
   );
 
   server.tool(
     'update_recipe',
-    'Change a recipe the user owns. Only the fields you pass change; everything else (image, allergens, nutriments, partial steps) round-trips unchanged. `ingredients`, `steps` and `categories` are replaced as a whole, never merged: to fix one ingredient, pass the full list from `get_recipe` with that entry changed. `collectionIds` replaces the recipe\'s collections; to add or remove a single one use `add_recipe_to_collection` / `remove_recipe_from_collection`. Recipes of other users, also ones shared through a list, are rejected with a 400 "You\'re not allowed to change the recipe". Two or more API calls per invocation. Returns the saved `RecipeDto`. To read use `get_recipe`, to delete `delete_recipe`.',
+    'Change a recipe the user owns. Only the fields you pass change; everything else (image, allergens, nutriments, partial steps) round-trips unchanged. `ingredients`, `steps` and `categories` are replaced as a whole, never merged: to fix one ingredient, pass the full list from `get_recipe` with that entry changed. `collectionIds` replaces the recipe\'s collections; to add or remove a single one use `add_recipe_to_collection` / `remove_recipe_from_collection`. `imageUrl` / `imageBase64` replace the cover image, `imageUrl: null` removes it. Recipes of other users, also ones shared through a list, are rejected with a 400 "You\'re not allowed to change the recipe". Two or more API calls per invocation. Returns the saved `RecipeDto`, plus `warnings` when the new image could not be stored (the other changes are saved anyway). To read use `get_recipe`, to delete `delete_recipe`.',
     {
       recipeId: z
         .string()
         .describe('Recipe uuid (from `search_recipes`, `get_recipe` or `create_recipe`).'),
       ...recipeFieldArgs,
+      ...recipeImageArgs,
     },
-    async ({ recipeId, collectionIds, ...changes }) => {
+    async ({ recipeId, collectionIds, imageUrl, imageBase64, mimeType, ...changes }) => {
+      const image = imageSourceOf({ imageUrl, imageBase64, mimeType });
       if (collectionIds) await assertCollectionsExist(collectionIds);
       // PUT /recipe replaces the whole recipe; fetch it so omitted fields
       // round-trip unchanged.
@@ -1109,13 +1507,110 @@ export function registerTools(server: McpServer): void {
           params: { path: { uid: recipeId } },
         }),
       );
+      const warnings: string[] = [];
+      let newImageUrl: string | null | undefined = imageUrl === null ? null : undefined;
+      if (image) {
+        const stored = await storeRecipeImage(recipeId, image);
+        if ('warning' in stored) warnings.push(stored.warning);
+        else newImageUrl = stored.imageUrl;
+      }
       const recipe = unwrap(
         await client().PUT('/recipe', {
-          body: applyRecipeChanges(current, changes, current.authorUuid),
+          body: applyRecipeChanges(
+            current,
+            { ...changes, imageUrl: newImageUrl },
+            current.authorUuid,
+          ),
         }),
       );
       if (collectionIds) await setRecipeCollections(recipeId, collectionIds);
-      return text(recipe);
+      return text(warnings.length ? { ...recipe, warnings } : recipe);
+    },
+  );
+
+  server.tool(
+    'import_recipe_from_url',
+    `Import the recipe(s) of a web page or a TikTok, Instagram or YouTube post the same way the Pantrist app does (origin \`web_import\` / \`social_import\`, author and platform recorded from the post). The server reads the page or post: caption, video narration and the post's images. One post can hold several recipes ("5 buckwheat recipes"), so \`recipes\` is an array. Use \`dryRun: true\` first to review drafts against \`sources\` (raw caption, and transcript / image texts when available) for anything missing or invented, then call again with the same arguments and \`dryRun: false\` to save the reviewed draft(s). Saving stores each recipe with its cover image and files it into \`collectionIds\`. Check \`find_recipes_by_link\` beforehand to skip posts already imported. For a carousel whose recipe sits only on the slides, this already reads the slides; use \`import_recipe_from_images\` when you only have the image URLs. Returns \`{ recipes, sources, warnings }\`: drafts without uuid on a dry run, saved \`RecipeDto\`s otherwise. A source with no recipe returns \`recipes: []\` and a \`no_recipe_found\` warning. Errors start with a code: \`unsupported_url\`, \`fetch_failed\`, \`rate_limited\` (with \`retryAfter\`), \`ai_quota_exhausted\`, \`account_required\`. Takes 10–60 s per call. ${importRateLimit}`,
+    {
+      url: z.string().url().describe('Recipe page, TikTok, Instagram or YouTube URL.'),
+      dryRun: z
+        .boolean()
+        .optional()
+        .describe('true: save nothing, only return the draft(s). Defaults to false.'),
+      collectionIds: recipeFieldArgs.collectionIds,
+      language: importLanguage,
+      shouldBePublic: recipeFieldArgs.shouldBePublic,
+    },
+    async ({ url, dryRun = false, collectionIds, language = 'de-DE', shouldBePublic = false }) => {
+      if (!dryRun && collectionIds) await assertCollectionsExist(collectionIds);
+      const result = await parseForImport({ url, targetLanguage: language }, { dryRun });
+      return text(
+        await finishImport(result, { dryRun, language, shouldBePublic, link: url, collectionIds }),
+      );
+    },
+  );
+
+  server.tool(
+    'import_recipe_from_images',
+    `Import the recipe(s) shown on images, e.g. the slides of a carousel post whose recipe only appears on the pictures, or photos of a cookbook page. The server fetches the images itself (http(s) only, max 10 MB each), reads them in order, and groups them by recipe: pages of one recipe become one result, distinct recipes distinct results. Up to 10 images per call. \`caption\` adds the post's text as context. Same flow as \`import_recipe_from_url\`: \`dryRun: true\` returns drafts and \`sources\` (with the text read from each image when available), \`dryRun: false\` saves them, each with the image at \`coverImageIndex\` as cover and \`link\` as its source link. Returns \`{ recipes, sources, warnings }\`; errors start with \`fetch_failed\` (an image could not be loaded), \`rate_limited\` (with \`retryAfter\`), \`ai_quota_exhausted\` or \`account_required\`. An image that cannot be loaded, or a URL without readable content, gives the AI use back. ${importRateLimit}`,
+    {
+      imageUrls: z
+        .array(z.string().url())
+        .min(1)
+        .max(10)
+        .describe('1–10 image URLs in slide order.'),
+      caption: z
+        .string()
+        .max(10_000)
+        .optional()
+        .describe('The post\'s text, read together with the images.'),
+      link: z
+        .string()
+        .url()
+        .optional()
+        .describe('URL of the original post, saved as the recipe\'s link (and so found by `find_recipes_by_link`).'),
+      dryRun: z
+        .boolean()
+        .optional()
+        .describe('true: save nothing, only return the draft(s). Defaults to false.'),
+      collectionIds: recipeFieldArgs.collectionIds,
+      language: importLanguage,
+      shouldBePublic: recipeFieldArgs.shouldBePublic,
+      coverImageIndex: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe('Index into `imageUrls` of the cover image. Defaults to 0. With several recipes, all of them get this cover.'),
+    },
+    async ({
+      imageUrls,
+      caption,
+      link,
+      dryRun = false,
+      collectionIds,
+      language = 'de-DE',
+      shouldBePublic = false,
+      coverImageIndex = 0,
+    }) => {
+      if (coverImageIndex >= imageUrls.length) {
+        throw new Error(`coverImageIndex ${coverImageIndex} is out of range for ${imageUrls.length} image(s).`);
+      }
+      if (!dryRun && collectionIds) await assertCollectionsExist(collectionIds);
+      const result = await parseForImport(
+        { imageUrls, caption, targetLanguage: language },
+        { dryRun },
+      );
+      return text(
+        await finishImport(result, {
+          dryRun,
+          language,
+          shouldBePublic,
+          link,
+          collectionIds,
+          image: { url: imageUrls[coverImageIndex] },
+        }),
+      );
     },
   );
 
@@ -1142,6 +1637,35 @@ export function registerTools(server: McpServer): void {
           name,
           shareInList,
           recipeCount,
+        })),
+      );
+    },
+  );
+
+  server.tool(
+    'list_recipes_in_collection',
+    'List the recipes in one recipe collection. Read-only and paginated. Returns an array of up to 10 `{ uuid, name, link, originalUrl }` per page (a page with fewer than 10 is the last) — just enough to compare a collection against another source; read a recipe in full with `get_recipe`.',
+    {
+      collectionId: z.string().describe('Collection uuid from `list_recipe_collections`.'),
+      currentPage: z
+        .number()
+        .int()
+        .min(1)
+        .optional()
+        .describe('1-based page index; 10 recipes per page. Defaults to 1.'),
+    },
+    async ({ collectionId, currentPage }) => {
+      const page = unwrap(
+        await client().POST('/recipe/filter/paginated', {
+          body: { collectionId, currentPage },
+        }),
+      );
+      return text(
+        page.map((recipe) => ({
+          uuid: recipe.uuid,
+          name: recipe.name,
+          link: recipe.link ?? null,
+          originalUrl: recipe.source?.originalUrl ?? null,
         })),
       );
     },

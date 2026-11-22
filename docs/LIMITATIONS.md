@@ -39,6 +39,21 @@ array through (~20+ fields per item). For a large pantry this is a lot of tokens
 and can crowd the model's context. Options if it bites: project to essential
 fields, paginate, or expose the list as an MCP **resource** instead of a tool.
 
+## Import and image routes are typed by hand 🟡
+
+`import_recipe_from_url`, `import_recipe_from_images`, `find_recipes_by_link`
+and the image arguments of `create_recipe` / `update_recipe` call
+`POST /parse-recipe/collection`, `POST /files/recipe-image` and
+`POST /recipe/by-links` (and `get_ai_quota` `GET /ai-quota`) through
+`request()` in `src/api.ts`, with the shapes written out in `src/tools.ts`.
+The parse and quota routes are app-specific and stay out of the public spec; the other two are newer than the snapshot. They need an
+API deployment that has them; against an older one these tools answer 404.
+
+The parse route allows 10 calls per minute **per client IP**. Every user of
+the hosted MCP server reaches the API from the server's address, so they share
+that budget, on top of each user's AI quota. The tool descriptions tell the
+model to pace a batch accordingly.
+
 ## The vendored OpenAPI snapshot drifts 🟢
 
 `openapi/pantrist-openapi.json` is a checked-in copy of the published spec and

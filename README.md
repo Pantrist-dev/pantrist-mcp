@@ -194,11 +194,16 @@ forwards it.
 | `list_recipe_reservations` | `GET /list/{listId}/pantryList` |
 | `cook_recipe` | `POST /list/{listId}/pantryList/reservations/{recipeUuid}/cooked` |
 | `release_recipe_reservation` | `DELETE /list/{listId}/pantryList/{itemId}/reservations/{recipeUuid}` or `DELETE /list/{listId}/pantryList/reservations/{recipeUuid}` |
-| `search_recipes` | `POST /recipe/filter` |
+| `search_recipes` | `POST /recipe/filter/paginated` |
+| `find_recipes_by_link` | `POST /recipe/by-links` |
 | `get_recipe` | `GET /recipe/{recipeId}` |
 | `delete_recipe` | `DELETE /recipe/{recipeId}` |
-| `create_recipe` | `POST /recipe` (+ `PUT /recipe-collection/recipe/{recipeId}` with `collectionIds`) |
-| `update_recipe` | `GET /recipe/{recipeId}` + `PUT /recipe` |
+| `create_recipe` | `POST /recipe` (+ `POST /files/recipe-image` + `PUT /recipe` with an image, `PUT /recipe-collection/recipe/{recipeId}` with `collectionIds`) |
+| `update_recipe` | `GET /recipe/{recipeId}` (+ `POST /files/recipe-image`) + `PUT /recipe` |
+| `import_recipe_from_url` | `POST /parse-recipe/collection`, then as `create_recipe` |
+| `import_recipe_from_images` | `POST /parse-recipe/collection`, then as `create_recipe` |
+| `list_recipes_in_collection` | `POST /recipe/filter/paginated` |
+| `get_ai_quota` | `GET /ai-quota` |
 | `list_recipe_collections` | `GET /recipe-collection` |
 | `create_recipe_collection` | `POST /recipe-collection` |
 | `add_recipe_to_collection` | `GET /recipe-collection/with-connected-recipe/{recipeId}` + `PUT /recipe-collection/recipe/{recipeId}` |
