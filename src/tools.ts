@@ -707,31 +707,50 @@ export function toDraft({ imageBase64, imageMimeType: _m, ...recipe }: ParsedRec
 }
 
 /**
- * Turn a parsed recipe into the body of a new save: a fresh uuid, the
- * signed-in user as author, the caller's language and visibility, and the
- * link of the post it came from.
+ * The fields a new recipe takes from a parse. The parse is a model's reading
+ * of someone else's post, so anything beyond the recipe's content (an
+ * `imageUrl` to hotlink, `copiedFromReceiptUuid`, `createdAt`, visibility)
+ * is never taken from it: the image goes through `storeRecipeImage`, the
+ * rest comes from the caller.
+ */
+const PARSED_CONTENT_FIELDS = [
+  'name', 'description', 'totalTime', 'cookingTime', 'waitingTime',
+  'preparationTime', 'defaultServings', 'servingsUnit', 'categories',
+  'allergens', 'ingredients', 'steps', 'partialSteps', 'nutriments',
+] as const;
+
+/**
+ * Turn a parsed recipe into the body of a new save: its content, a fresh
+ * uuid, the signed-in user as author, the caller's language and visibility,
+ * and the link of the post it came from.
  */
 export function parsedToNewRecipe(
   parsed: ParsedRecipe,
   options: { authorUuid: string; language: string; shouldBePublic: boolean; link?: string },
 ): RecipeDto {
-  const { imageBase64: _b, imageMimeType: _m, ...recipe } = parsed;
+  const content: Record<string, unknown> = {};
+  for (const key of PARSED_CONTENT_FIELDS) {
+    if (parsed[key] !== undefined) content[key] = parsed[key];
+  }
   const draft = {
-    ...recipe,
+    ...content,
     uuid: randomUUID(),
     authorUuid: options.authorUuid,
     language: options.language,
     shouldBePublic: options.shouldBePublic,
-    showAuthor: recipe.showAuthor ?? true,
-    link: recipe.link || options.link,
-    ingredients: recipe.ingredients ?? [],
-    steps: recipe.steps ?? [],
-    categories: recipe.categories ?? [],
-  } as RecipeDto;
+    showAuthor: true,
+    link: options.link,
+    ingredients: parsed.ingredients ?? [],
+    steps: parsed.steps ?? [],
+    categories: parsed.categories ?? [],
+  } as unknown as RecipeDto;
   const body = applyRecipeChanges(draft, {}, options.authorUuid);
-  // The save derives origin, platform and originalUrl from `link`, but the
-  // author handle only the parse saw, so its source block goes along.
-  if (recipe.source) body.source = recipe.source;
+  // The save derives origin, platform and originalUrl from `link`; the
+  // author handle only the parse saw, so that one field goes along.
+  const channelName = parsed.source?.channelName;
+  if (channelName) {
+    body.source = { channelName } as RecipeDto['source'];
+  }
   return body;
 }
 

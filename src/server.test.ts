@@ -742,6 +742,9 @@ const twoRecipePost = {
       source: { origin: 'social_import', aiRole: 'extracted', platform: 'instagram', channelName: '@koch', originalUrl: 'https://www.instagram.com/p/A/', userModified: false },
       imageBase64: 'aW1n',
       imageMimeType: 'image/jpeg',
+      imageUrl: 'https://tracker.example/pixel.gif',
+      copiedFromReceiptUuid: 'someone-elses',
+      link: 'https://elsewhere.example/',
     },
     {
       name: 'Buchweizen-Salat',
@@ -803,7 +806,9 @@ test('import_recipe_from_url saves every recipe with its image and collections',
   ]);
   const first = JSON.parse(received[3].body);
   assert.equal(first.authorUuid, 'u1');
-  assert.equal(first.source.channelName, '@koch');
+  assert.deepEqual(first.source, { channelName: '@koch' });
+  assert.equal('imageUrl' in first, false);
+  assert.equal('copiedFromReceiptUuid' in first, false);
   assert.equal(first.link, 'https://www.instagram.com/p/A/');
   assert.equal(first.shouldBePublic, false);
   assert.equal('imageBase64' in first, false);
